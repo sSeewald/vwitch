@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="vwitch" fill="none" stroke="currentColor" stroke-linecap="round">
+  <title>vwitch</title>
+    <circle cx="32" cy="31" r="2" fill="currentColor" stroke="none" opacity=".45"/>
+    <circle cx="32" cy="25.5" r="2" fill="currentColor" stroke="none" opacity=".45"/>
+  <path d="M17 18 L32 45 L47 18" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="17" cy="18" r="5" fill="currentColor" stroke="none"/>
+  <circle cx="47" cy="18" r="5" fill="currentColor" stroke="none"/>
+  <circle cx="32" cy="18" r="3.5" stroke-width="2" opacity=".45"/>
+  <circle cx="32" cy="45" r="7" stroke-width="3" fill="var(--logo-bg, #fff)"/>
+  <circle cx="32" cy="45" r="2.5" fill="currentColor" stroke="none"/>
+</svg>

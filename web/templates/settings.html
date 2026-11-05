@@ -1,0 +1,79 @@
+{{define "content"}}{{$l := .Lang}}{{$c := .Data.Config}}
+<form class="stack" method="post" action="/settings">
+  <section class="card stack">
+    <h3>{{t $l "settings.selection"}}</h3>
+    <div class="field"><label for="s1">{{t $l "dash.strategy"}}</label>
+      <select id="s1" name="strategy">{{range $o := list "failover" "weighted" "fixed"}}<option value="{{$o}}" {{if eq $o (print $c.Selection.Strategy)}}selected{{end}}>{{t $l (print "strategy." $o)}}</option>{{end}}</select></div>
+    <div class="field"><label for="s2">{{t $l "settings.fixed"}}</label>
+      <select id="s2" name="fixed"><option value="">–</option>{{range $c.Egresses}}<option {{if eq .Name $c.Selection.Fixed}}selected{{end}}>{{.Name}}</option>{{end}}</select></div>
+    <div class="field"><label for="s3">{{t $l "dash.offline"}}</label>
+      <select id="s3" name="offline">{{range $o := list "block" "ask" "direct"}}<option value="{{$o}}" {{if eq $o (print $c.Selection.Offline)}}selected{{end}}>{{t $l (print "offline." $o)}}</option>{{end}}</select>
+      <p class="hint">{{t $l "settings.offline.hint"}}</p></div>
+    <label class="check"><span>{{t $l "settings.allow_direct"}}</span><input class="switch" type="checkbox" name="allow_direct" value="true" {{if $c.Server.AllowDirect}}checked{{end}}></label>
+  </section>
+
+  <section class="card stack">
+    <h3>{{t $l "settings.clients"}}</h3>
+    <div class="field"><label for="s7">{{t $l "settings.hostnames"}}</label><input id="s7" name="hostnames" value="{{join $c.Web.Hostnames ", "}}" autocapitalize="none" spellcheck="false"><p class="hint">{{t $l "settings.hostnames.hint"}}</p></div>
+    <fieldset class="field">
+      <legend>{{t $l "settings.portal_actions"}}</legend>
+      {{range $o := list "fast" "direct" "block"}}
+      <label class="check"><span>{{t $l (print "settings.action." $o)}}</span><input class="switch" type="checkbox" name="portal_actions" value="{{$o}}" {{if hasAction $c.Web.Portal.Actions $o}}checked{{end}}></label>
+      {{end}}
+    </fieldset>
+    <div class="field"><label for="s11">{{t $l "language"}}</label>
+      <select id="s11" name="language">{{range $.Langs}}<option value="{{.}}" {{if eq . $c.Web.Language}}selected{{end}}>{{t $l (print "lang." .)}}</option>{{end}}</select></div>
+  </section>
+
+  <section class="card stack">
+    <h3>{{t $l "settings.network"}}</h3>
+    <div class="field"><label for="s5">{{t $l "settings.endpoint"}}</label><input id="s5" name="endpoint" value="{{$c.Server.Endpoint}}" autocapitalize="none" spellcheck="false"><p class="hint">{{t $l "settings.endpoint.hint"}}</p></div>
+    <div class="field"><label for="s6">{{t $l "settings.resolver"}}</label><input id="s6" name="resolver" value="{{$c.DNS.Resolver}}" inputmode="decimal"></div>
+    <div class="field"><label for="s9">{{t $l "settings.admin_interfaces"}}</label><input id="s9" name="admin_interfaces" value="{{join $c.Server.AdminInterfaces ", "}}" autocapitalize="none" spellcheck="false"><p class="hint">{{t $l "settings.admin_interfaces.hint"}}</p></div>
+    <label class="check"><span>{{t $l "settings.lockdown_ssh"}}</span><input class="switch" type="checkbox" name="lockdown_ssh" value="true" {{if $c.Server.LockdownSSH}}checked{{end}}></label>
+  </section>
+
+  <div class="sticky-save"><button class="block">{{t $l "save"}}</button></div>
+</form>
+
+<h2>{{t $l "settings.security"}}</h2>
+<form class="card stack" method="post" action="/settings/account">
+  <h3>{{t $l "settings.account"}}</h3>
+  <div class="field"><label for="u1">{{t $l "login.username"}}</label><input id="u1" name="username" value="{{$c.Web.Admin.Username}}" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+  <div class="field"><label for="p0">{{t $l "settings.current_password"}}</label><input id="p0" name="current_password" type="password" autocomplete="current-password" required></div>
+  <div class="field"><label for="p1">{{t $l "settings.password"}}</label><input id="p1" name="password" type="password" minlength="10" autocomplete="new-password"><p class="hint">{{t $l "settings.password.hint"}}</p></div>
+  <button>{{t $l "save"}}</button>
+</form>
+
+<section class="card stack" style="margin-top:12px">
+  <h3>{{t $l "settings.tls.title"}}</h3>
+  {{with .Data.Cert}}
+  <div class="certinfo">
+    {{if selfSigned .}}<span class="pill warn">{{t $l "settings.tls.selfsigned"}}</span><p class="hint">{{t $l "settings.tls.selfsigned.hint"}}</p>
+    {{else}}<span class="pill ok">{{t $l "settings.tls.own"}}</span>{{end}}
+    <dl>
+      <dt>{{t $l "settings.tls.names"}}</dt><dd class="mono">{{join .DNSNames ", "}}{{range .IPAddresses}}, {{.}}{{end}}</dd>
+      {{if not (selfSigned .)}}<dt>{{t $l "settings.tls.issuer"}}</dt><dd>{{.Issuer.CommonName}}</dd>{{end}}
+      <dt>{{t $l "settings.tls.valid_until"}}</dt><dd>{{.NotAfter.Format "02.01.2006"}}</dd>
+      <dt>SHA-256</dt><dd class="mono fp">{{fingerprint .}}</dd>
+    </dl>
+  </div>
+  {{if not (selfSigned .)}}<form method="post" action="/settings/tls/delete" hx-confirm="{{t $l "settings.tls.remove.confirm"}}"><button class="danger small">{{t $l "settings.tls.remove"}}</button></form>{{end}}
+  {{end}}
+  <form class="stack" method="post" action="/settings/tls" enctype="multipart/form-data" hx-boost="false">
+    <div class="files">
+      <label class="file"><span>{{t $l "settings.tls.cert"}}</span><input type="file" name="cert_file" accept=".pem,.crt,.cer"></label>
+      <label class="file"><span>{{t $l "settings.tls.key"}}</span><input type="file" name="key_file" accept=".pem,.key"></label>
+    </div>
+    <details>
+      <summary class="small">{{t $l "settings.tls.paste"}}</summary>
+      <div class="stack" style="margin-top:10px">
+        <textarea name="cert" aria-label="{{t $l "settings.tls.cert"}}" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+        <textarea name="key" aria-label="{{t $l "settings.tls.key"}}" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+      </div>
+    </details>
+    <p class="hint">{{t $l "settings.tls.hint"}}</p>
+    <button>{{t $l "settings.tls.install"}}</button>
+  </form>
+</section>
+{{end}}

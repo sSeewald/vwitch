@@ -1,0 +1,28 @@
+{{define "content"}}{{$l := .Lang}}
+<div class="card">
+  <ul class="list">
+  {{range .Data.Status.Clients}}
+    <li class="row">
+      <div>
+        <h3><a href="/clients/{{.Name}}">{{.Name}}</a></h3>
+        <p class="muted small mono">{{.Address}}{{if .Expires}} · {{t $l "client.expires"}} {{.Expires.Format "02.01.2006"}}{{end}}</p>
+      </div>
+      <span class="spacer"></span>
+      {{if not .Active}}<span class="pill">{{t $l "client.inactive"}}</span>
+      {{else if .Online}}<span class="pill ok">{{t $l "client.online"}}</span>
+      {{else}}<span class="pill">{{t $l "client.offline"}}</span>{{end}}
+      <span class="pill">{{exitLabel $l .Exit .Egress}}</span>
+    </li>
+  {{else}}
+    <li class="muted">{{t $l "client.none"}}</li>
+  {{end}}
+  </ul>
+</div>
+
+<h2>{{t $l "client.add"}}</h2>
+<form class="card stack" method="post" action="/clients">
+  <div class="field"><label for="cname">{{t $l "name"}}</label><input id="cname" name="name" required pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,31}"></div>
+  <div class="field"><label for="cexp">{{t $l "client.expires"}}</label><input id="cexp" name="expires" type="date"><p class="hint">{{t $l "client.expires.hint"}}</p></div>
+  <button>{{t $l "client.add"}}</button>
+</form>
+{{end}}

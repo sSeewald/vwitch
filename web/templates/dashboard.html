@@ -1,0 +1,92 @@
+{{define "content"}}
+<div hx-ext="sse" sse-connect="/events">
+  <div sse-swap="overview">{{template "overview" .}}</div>
+  <h2>{{t .Lang "dash.egresses"}}</h2>
+  <div sse-swap="egresses">{{template "egress-cards" .}}</div>
+  <h2>{{t .Lang "dash.log"}}</h2>
+  <div class="card log" sse-swap="log">{{template "event-log" .}}</div>
+</div>
+<h2>{{t .Lang "sec.title"}}</h2>
+<div hx-get="/security" hx-trigger="load" hx-swap="outerHTML"><div class="card muted small">{{t .Lang "sec.checking"}}</div></div>
+{{end}}
+
+{{define "security"}}{{$l := .Lang}}{{$s := .Data}}
+<details class="card security">
+  <summary>
+    {{if $s.Findings}}<span class="pill warn">{{t $l "sec.findings" $s.Findings}}</span>{{else}}<span class="pill ok">{{t $l "sec.ok"}}</span>{{end}}
+    <span class="muted small">{{t $l "sec.summary"}}</span>
+  </summary>
+  <div class="stack sec-body">
+    {{if $s.Error}}<p class="alert">{{$s.Error}}</p>{{end}}
+    {{if $s.Ports}}
+    <p class="small">{{t $l "sec.ports"}}</p>
+    <ul class="ports">
+      {{range $s.Ports}}<li><span class="mono">{{.Proto}}/{{.Addr.Port}}</span> <b>{{if .Process}}{{.Process}}{{else}}?{{end}}</b> <span class="muted mono small">{{.Addr}}</span>
+        {{if and (eq .Proto "tcp") (eq .Addr.Port 22)}}<p class="hint">{{t $l "sec.ssh"}}</p>{{end}}</li>{{end}}
+    </ul>
+    {{end}}
+    {{range $s.PublicAdmin}}<p class="alert">{{t $l "sec.public_admin" .}}</p>{{end}}
+    <p class="small"><b>{{t $l "sec.advice"}}</b></p>
+    <ul class="advice small">
+      <li>{{t $l "sec.advice.firewall" $s.ListenPort}}</li>
+      <li>{{t $l "sec.advice.overlay"}}</li>
+      <li>{{t $l "sec.advice.cert"}}</li>
+    </ul>
+    <p class="hint">{{t $l "sec.more"}} <a href="{{repoURL}}#bulletproof-hardening" target="_blank" rel="noopener">README · Bulletproof hardening</a></p>
+  </div>
+</details>
+{{end}}
+
+{{define "overview"}}{{$s := .Data.Status}}{{$l := .Lang}}
+<div class="card stack">
+  <div>
+    <h1>{{if $s.Switches.KillSwitch}}{{t $l "dash.killswitch.on"}}{{else if and $s.Switches.Fast .Data.AllowDirect}}{{t $l "dash.direct.on"}}{{else}}{{t $l "dash.running"}}{{end}}</h1>
+    <p class="muted small">{{t $l "dash.strategy"}}: <b>{{t $l (print "strategy." $s.Selection.Strategy)}}</b> · {{t $l "dash.offline"}}: <b>{{t $l (print "offline." $s.Selection.Offline)}}</b> · {{t $l "dash.clients.online" (online $s.Clients) (len $s.Clients)}}</p>
+  </div>
+  <div class="controls">
+    <form class="control{{if $s.Switches.KillSwitch}} danger-on{{end}}" method="post" action="/switches">
+      <input type="hidden" name="kill_switch" value="{{not $s.Switches.KillSwitch}}">
+      <div><b>{{t $l "dash.killswitch"}}</b><p class="hint">{{t $l "dash.killswitch.desc"}}</p></div>
+      <button class="switch" role="switch" aria-checked="{{$s.Switches.KillSwitch}}" aria-label="{{t $l "dash.killswitch"}}"></button>
+    </form>
+    {{if .Data.AllowDirect}}
+    <form class="control" method="post" action="/switches">
+      <input type="hidden" name="fast" value="{{not $s.Switches.Fast}}">
+      <div><b>{{t $l "dash.direct"}}</b><p class="hint">{{t $l "dash.direct.desc"}}</p></div>
+      <button class="switch" role="switch" aria-checked="{{$s.Switches.Fast}}" aria-label="{{t $l "dash.direct"}}"></button>
+    </form>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "egress-cards"}}{{$l := .Lang}}
+<div class="grid">
+{{range $i, $e := .Data.Status.Egresses}}
+  <div class="card">
+    <div class="row">
+      <h3>{{.Name}}</h3><span class="spacer"></span>
+      {{if not .Enabled}}<span class="pill">{{t $l "egress.disabled"}}</span>
+      {{else if .Healthy}}<span class="pill ok">{{t $l "egress.up"}}</span>
+      {{else}}<span class="pill bad">{{t $l "egress.down"}}</span>{{end}}
+    </div>
+    <p class="muted small mono">{{.Endpoint}}{{if .Resolved}} → {{.Resolved}}{{end}}</p>
+    <div class="stats">
+      <div class="stat"><b>{{age .HandshakeAge}}</b><span>{{t $l "egress.handshake"}}</span></div>
+      <div class="stat"><b>{{if .LatencyMs}}{{printf "%.0f ms" .LatencyMs}}{{else}}–{{end}}</b><span>{{t $l "egress.latency"}}</span></div>
+      <div class="stat"><b>{{.Clients}}</b><span>{{t $l "egress.clients"}}</span></div>
+      <div class="stat"><b>{{rate .RxRate}}</b><span>↓ {{t $l "egress.rx"}}</span></div>
+      <div class="stat"><b>{{rate .TxRate}}</b><span>↑ {{t $l "egress.tx"}}</span></div>
+      <div class="stat"><b>#{{inc $i}}{{if eq (print $.Data.Config.Selection.Strategy) "weighted"}} · {{.Weight}}{{end}}</b><span>{{if eq (print $.Data.Config.Selection.Strategy) "weighted"}}{{t $l "egress.position_weight"}}{{else}}{{t $l "egress.position"}}{{end}}</span></div>
+    </div>
+    {{if .Error}}<p class="hint">{{.Error}}</p>{{end}}
+  </div>
+{{else}}
+  <div class="card"><p>{{t $l "egress.none"}}</p><a class="btn" href="/egresses">{{t $l "egress.add"}}</a></div>
+{{end}}
+</div>
+{{end}}
+
+{{define "event-log"}}
+{{range (reverse .Data.Status.Events)}}<div><time>{{.Time.Format "02.01. 15:04:05"}}</time>{{eventText $.Lang .}}</div>{{else}}<p class="muted">{{t .Lang "dash.log.empty"}}</p>{{end}}
+{{end}}

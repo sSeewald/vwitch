@@ -1,0 +1,19 @@
+# Keep every pin current: Go modules, GitHub Actions (SHA pins) and the
+# Docker base images (digest pins). Minor/patch updates come grouped.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      go:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions:
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directories: [/, /test/integration]
+    schedule: { interval: weekly }

@@ -1,0 +1,65 @@
+{{define "content"}}{{$l := .Lang}}{{$weighted := eq (print .Data.Config.Selection.Strategy) "weighted"}}
+<p class="muted small">{{if $weighted}}{{t $l "egress.order.weighted"}}{{else}}{{t $l "egress.order.hint"}}{{end}}</p>
+<ol class="egress-list">
+{{range $i, $e := .Data.Status.Egresses}}
+  <li class="egress{{if not $e.Enabled}} off{{end}}">
+    <span class="rank" aria-hidden="true">{{inc $i}}</span>
+    <div class="egress-main">
+      <div class="egress-head">
+        <h3>{{$e.Name}}</h3>
+        {{if not $e.Enabled}}<span class="pill">{{t $l "egress.disabled"}}</span>{{else if $e.Healthy}}<span class="pill ok">{{t $l "egress.up"}}</span>{{else}}<span class="pill bad">{{t $l "egress.down"}}</span>{{end}}
+      </div>
+      <p class="meta mono">{{$e.Endpoint}}</p>
+      <p class="meta">
+        <span>{{t $l "egress.handshake"}} <b>{{age $e.HandshakeAge}}</b></span>
+        <span>{{t $l "egress.latency"}} <b>{{if $e.LatencyMs}}{{printf "%.0f ms" $e.LatencyMs}}{{else}}–{{end}}</b></span>
+        <span>{{t $l "egress.clients"}} <b>{{$e.Clients}}</b></span>
+        {{if $weighted}}<span>{{t $l "egress.weight"}} <b>{{$e.Weight}}</b></span>{{end}}
+      </p>
+      <details class="egress-more">
+        <summary>{{t $l "egress.options"}}</summary>
+        <form class="egress-form" method="post" action="/egresses/{{$e.Name}}">
+          <div class="field"><label for="res-{{$e.Name}}">{{t $l "egress.resolve"}}</label>
+            <select id="res-{{$e.Name}}" name="resolve">
+              {{range $o := list "any" "ipv4" "ipv6"}}<option value="{{$o}}" {{if eq $o (resolveOf $.Data.Config $e.Name)}}selected{{end}}>{{t $l (print "resolve." $o)}}</option>{{end}}
+            </select></div>
+          {{if $weighted}}<div class="field"><label for="w-{{$e.Name}}">{{t $l "egress.weight"}}</label>
+            <input id="w-{{$e.Name}}" type="number" name="weight" min="1" max="100" value="{{$e.Weight}}">
+            <p class="hint">{{t $l "egress.weight.hint"}}</p></div>{{end}}
+          <button class="small">{{t $l "save"}}</button>
+        </form>
+        <form method="post" action="/egresses/{{$e.Name}}/delete" hx-confirm="{{t $l "egress.delete.confirm" $e.Name}}">
+          <button class="danger small">{{t $l "delete"}}</button>
+        </form>
+      </details>
+    </div>
+    <div class="egress-actions">
+      <div class="seg" role="group" aria-label="{{t $l "egress.order"}}">
+        <form method="post" action="/egresses/{{$e.Name}}/move"><input type="hidden" name="dir" value="up"><button class="icon" {{if eq $i 0}}disabled{{end}} aria-label="{{t $l "egress.up_order"}}" title="{{t $l "egress.up_order"}}">↑</button></form>
+        <form method="post" action="/egresses/{{$e.Name}}/move"><input type="hidden" name="dir" value="down"><button class="icon" {{if eq (inc $i) (len $.Data.Status.Egresses)}}disabled{{end}} aria-label="{{t $l "egress.down_order"}}" title="{{t $l "egress.down_order"}}">↓</button></form>
+      </div>
+      <form method="post" action="/egresses/{{$e.Name}}">
+        <input type="hidden" name="enabled" value="{{not $e.Enabled}}">
+        <button class="switch" role="switch" aria-checked="{{$e.Enabled}}" aria-label="{{t $l "egress.enabled"}}" title="{{t $l "egress.enabled"}}"></button>
+      </form>
+    </div>
+  </li>
+{{else}}
+  <li class="card muted">{{t $l "egress.none"}}</li>
+{{end}}
+</ol>
+
+<h2>{{t $l "egress.add"}}</h2>
+<form class="card stack" method="post" action="/egresses" enctype="multipart/form-data" hx-boost="false">
+  <div class="field"><label for="ename">{{t $l "name"}}</label><input id="ename" name="name" required pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,31}"></div>
+  <div class="field"><label for="econf">{{t $l "egress.config"}}</label>
+    <textarea id="econf" name="config" placeholder="[Interface]&#10;PrivateKey = …&#10;Address = …&#10;&#10;[Peer]&#10;PublicKey = …&#10;Endpoint = host:port"></textarea>
+    <p class="hint">{{t $l "egress.config.hint"}}</p>
+    <input type="file" name="file" accept=".conf,text/plain">
+  </div>
+  <div class="field"><label for="eres">{{t $l "egress.resolve"}}</label>
+    <select id="eres" name="resolve">{{range $o := list "any" "ipv4" "ipv6"}}<option value="{{$o}}">{{t $l (print "resolve." $o)}}</option>{{end}}</select>
+  </div>
+  <button>{{t $l "egress.add"}}</button>
+</form>
+{{end}}

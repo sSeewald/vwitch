@@ -1,0 +1,67 @@
+{{define "layout"}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>{{if .Title}}{{t .Lang .Title}} · {{end}}vwitch</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<script src="/static/theme.js"></script>
+<link rel="stylesheet" href="/static/vwitch.css">
+<script src="/static/htmx.min.js" defer></script>
+<script src="/static/htmx-ext-sse.min.js" defer></script>
+</head>
+<body hx-boost="true">
+{{if .Center}}
+<div class="center-page">
+  <main class="center-main">
+    <div class="center-brand">
+      <img src="/static/logo.svg" alt="" width="88" height="88">
+      <span>vwitch</span>
+    </div>
+    <div class="center-card">
+      {{if .Error}}<p class="alert" role="alert">{{.Error}}</p>{{end}}
+      {{template "content" .}}
+    </div>
+  </main>
+  <footer class="foot">
+    <div class="prefs">{{template "prefs" .}}</div>
+    {{template "credits"}}
+  </footer>
+</div>
+{{else}}
+<div class="wrap{{if .Narrow}} narrow{{end}}">
+  <header class="top">
+    <a class="brand" href="/"><img src="/static/logo.svg" alt="">vwitch</a>
+    <span class="spacer"></span>
+    {{template "prefs" .}}
+    {{if .Admin}}<form method="post" action="/logout"><button class="secondary small">{{t .Lang "logout"}}</button></form>{{end}}
+  </header>
+  {{if .Admin}}
+  <nav class="nav">
+    {{range .Nav}}<a href="{{.Path}}" {{if eq .Path $.Path}}aria-current="page"{{end}}>{{t $.Lang .Label}}</a>{{end}}
+  </nav>
+  {{end}}
+  {{if .Error}}<p class="alert" role="alert">{{.Error}}</p>{{end}}
+  {{template "content" .}}
+  <footer class="foot">{{template "credits"}}</footer>
+</div>
+{{end}}
+</body>
+</html>{{end}}
+
+{{define "prefs"}}
+<nav class="lang" aria-label="{{t .Lang "language"}}">
+  {{range .Langs}}<a href="?lang={{.}}" hx-boost="false" {{if eq . $.Lang}}aria-current="true"{{end}}>{{.}}</a>{{end}}
+</nav>
+<button type="button" class="icon theme" data-theme-toggle data-label-auto="{{t .Lang "theme.auto"}}" data-label-light="{{t .Lang "theme.light"}}" data-label-dark="{{t .Lang "theme.dark"}}" aria-label="{{t .Lang "theme.auto"}}"></button>
+{{end}}
+
+{{define "credits"}}
+<div class="credits">
+  <span class="ver">vwitch {{version}}</span>
+  <a class="gh" href="{{repoURL}}" target="_blank" rel="noopener" aria-label="GitHub" title="GitHub">
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+  </a>
+</div>
+{{end}}

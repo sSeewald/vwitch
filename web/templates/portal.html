@@ -1,0 +1,22 @@
+{{define "content"}}{{$l := .Lang}}{{$c := .Data.Client}}
+<div class="card stack">
+  <div class="hero">
+    <span class="dot" style="color:var(--{{.Data.Tone}})"></span>
+    <div>
+      <div class="muted small">{{t $l (print "portal.state." .Data.State)}}</div>
+      <h1>{{t $l (print "portal.title." .Data.State) .Data.Exit}}</h1>
+    </div>
+  </div>
+  <p class="muted">{{t $l (print "portal.text." .Data.State)}}</p>
+  {{range .Data.Actions}}
+  <form method="post" action="/action" hx-boost="false">
+    <input type="hidden" name="action" value="{{.Action}}">
+    <input type="hidden" name="on" value="{{.On}}">
+    {{if .Note}}<p class="note">{{t $l .Note}}</p>{{end}}
+    <button class="block{{if .Secondary}} secondary{{end}}">{{t $l .Label}}</button>
+  </form>
+  {{end}}
+  {{if not $c.Name}}<p class="note">{{t $l "portal.unknown"}}</p>{{end}}
+</div>
+<p class="muted small" style="text-align:center;margin-top:12px">{{$c.Name}}{{if $c.Address}} · {{$c.Address}}{{end}}</p>
+{{end}}

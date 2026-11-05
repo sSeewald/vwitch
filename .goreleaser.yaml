@@ -1,0 +1,63 @@
+# GoReleaser v2: static binaries, .deb packages, checksums and the installer.
+version: 2
+project_name: vwitch
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: vwitch
+    main: ./cmd/vwitch
+    binary: vwitch
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X github.com/sseewald/vwitch/internal/version.version={{ .Version }}"]
+
+archives:
+  - id: tarball
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [README.md, LICENSE, deploy/vwitch.service]
+    wrap_in_directory: false
+
+nfpms:
+  - id: deb
+    package_name: vwitch
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [deb, rpm]
+    vendor: vwitch
+    homepage: https://github.com/sseewald/vwitch
+    maintainer: Sascha Seewald
+    description: Egress switch for an AmneziaWG relay with health based failover, kill switch and web UI.
+    license: MIT
+    section: net
+    bindir: /usr/bin
+    dependencies: [ca-certificates]
+    recommends: [nftables]
+    contents:
+      - src: deploy/vwitch.service
+        dst: /lib/systemd/system/vwitch.service
+      - dst: /etc/vwitch
+        type: dir
+        file_info: { mode: 0o700 }
+
+checksum:
+  name_template: checksums.txt
+
+# one SPDX SBOM per archive and package (needs syft, installed in CI)
+sboms:
+  - artifacts: archive
+  - id: packages
+    artifacts: package
+
+release:
+  mode: keep-existing # release-please creates the release and its notes
+  extra_files:
+    - glob: deploy/install.sh
+
+changelog:
+  disable: true # CHANGELOG.md and release notes come from release-please

@@ -1,0 +1,43 @@
+{{define "content"}}{{$l := .Lang}}{{$c := .Data.Client}}{{$route := route $c}}
+<div class="card stack">
+  <div class="row">
+    <h1>{{$c.Name}}</h1><span class="spacer"></span>
+    <span class="pill">{{exitLabel $l $c.Exit $c.Egress}}</span>
+  </div>
+  {{with reasonText $l $c.Reason}}<p class="muted small">{{.}}</p>{{end}}
+</div>
+
+<form class="card stack" method="post" action="/clients/{{$c.Name}}" style="margin-top:12px">
+  <label class="check"><span>{{t $l "client.enabled"}}<span class="hint">{{t $l "client.enabled.hint"}}</span></span><input class="switch" type="checkbox" name="enabled" value="true" {{if $c.Enabled}}checked{{end}}></label>
+  <div class="field"><label for="route">{{t $l "client.route"}}</label>
+    <select id="route" name="route">
+      <option value="auto" {{if eq $route "auto"}}selected{{end}}>{{t $l "client.route.auto" (t $l (print "strategy." .Data.Strategy))}}</option>
+      {{range .Data.Egresses}}<option value="egress:{{.Name}}" {{if eq $route (print "egress:" .Name)}}selected{{end}}>{{t $l "client.route.egress" .Name}}</option>{{end}}
+      {{if .Data.AllowDirect}}<option value="direct" {{if eq $route "direct"}}selected{{end}}>{{t $l "client.route.direct"}}</option>{{end}}
+      {{if hasPrefix $route "strategy:"}}<option value="{{$route}}" selected>{{t $l (print "strategy." $c.Strategy)}}</option>{{end}}
+    </select>
+    <p class="hint">{{t $l "client.route.hint"}}</p></div>
+  <div class="field"><label for="exp">{{t $l "client.expires"}}</label>
+    <input id="exp" type="date" name="expires" value="{{if $c.Expires}}{{$c.Expires.Format "2006-01-02"}}{{end}}">
+    <p class="hint">{{t $l "client.expires.hint"}}</p></div>
+  <button>{{t $l "save"}}</button>
+</form>
+
+<form class="card control{{if $c.Block}} danger-on{{end}}" method="post" action="/clients/{{$c.Name}}/switch" style="margin-top:12px">
+  <input type="hidden" name="action" value="block">
+  <input type="hidden" name="on" value="{{not $c.Block}}">
+  <div><b>{{t $l "client.block"}}</b><p class="hint">{{t $l "client.block.desc"}}</p></div>
+  <button class="switch" role="switch" aria-checked="{{$c.Block}}" aria-label="{{t $l "client.block"}}"></button>
+</form>
+
+<h2>{{t $l "client.config"}}</h2>
+<form class="card stack" method="post" action="/clients/{{$c.Name}}/renew" hx-boost="false" hx-confirm="{{t $l "client.renew.confirm" $c.Name}}">
+  {{if $c.Outdated}}<p class="alert">{{t $l "client.outdated"}}</p>{{end}}
+  <p class="small">{{t $l "client.config.once"}}</p>
+  <button class="{{if not $c.Outdated}}secondary{{end}}">{{t $l "client.renew"}}</button>
+</form>
+
+<form method="post" action="/clients/{{$c.Name}}/delete" hx-confirm="{{t $l "client.delete.confirm" $c.Name}}" style="margin-top:16px">
+  <button class="danger">{{t $l "client.delete"}}</button>
+</form>
+{{end}}

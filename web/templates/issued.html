@@ -1,0 +1,13 @@
+{{define "content"}}{{$l := .Lang}}{{$d := .Data}}
+<div class="card stack">
+  <h1>{{if $d.Renewed}}{{t $l "issued.title.renewed" $d.Name}}{{else}}{{t $l "issued.title" $d.Name}}{{end}}</h1>
+  <p class="note">{{t $l "issued.once"}}</p>
+  <div class="qr">{{$d.QR}}</div>
+  <p class="hint">{{t $l "client.config.hint"}}</p>
+  <div class="row">
+    <a class="btn" href="{{$d.Download}}" hx-boost="false" download="{{$d.Name}}.conf">{{t $l "client.download"}}</a>
+    <a class="btn secondary" href="/clients/{{$d.Name}}">{{t $l "issued.done"}}</a>
+  </div>
+  <details><summary class="small">{{t $l "client.show"}}</summary><pre class="mono">{{$d.Config}}</pre></details>
+</div>
+{{end}}

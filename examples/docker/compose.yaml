@@ -1,0 +1,26 @@
+# vwitch as a drop-in on any Docker host.
+# Requirements on the host: WireGuard kernel module (Debian 12+, Ubuntu
+# 22.04+ have it) and, if the container may not set it, sysctl
+# net.ipv4.ip_forward=1.
+services:
+  vwitch:
+    image: ghcr.io/sseewald/vwitch:latest   # pin a version tag in production
+    container_name: vwitch
+    restart: unless-stopped
+    network_mode: host          # vwitch manages host interfaces, routes and nftables
+    # least privilege: drop everything, add only what networking needs
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW, NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    environment:
+      VWITCH_ENDPOINT: vpn.example.org   # public address clients connect to
+      VWITCH_ALLOW_DIRECT: "true"
+      VWITCH_LANGUAGE: de
+      # VWITCH_ADMIN_INTERFACES: lo,wt0
+    volumes:
+      - ./config:/etc/vwitch        # vwitch.yaml + admin-password on first start
+      - ./state:/var/lib/vwitch
+      - ./run:/run/vwitch           # API socket for the CLI
