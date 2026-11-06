@@ -33,7 +33,7 @@
     <li class="drow{{if $blocked}} blocked{{end}}">
       <div class="drow-main">
         <div class="drow-head"><b class="mono">{{.Domain}}</b>
-          {{if $blocked}}<span class="tag bad">{{t $l "act.blocked"}}</span>{{end}}
+          {{if $blocked}}<span class="tag bad">{{t $l "act.blocked"}}</span>{{else if .Country}}<span class="tag bad" title="{{t $l "act.region_blocked.hint" (country $l .Country)}}">{{flag .Country}} {{t $l "act.region_blocked"}}</span>{{end}}
           {{with $via}}<span class="tag ok">→ {{.}}</span>{{end}}</div>
         <p class="muted small">{{t $l "act.queries" .Queries}}{{if .Blocked}} · {{t $l "act.queries_blocked" .Blocked}}{{end}} · {{join .Clients ", "}} · {{.Last.Format "15:04"}}</p>
       </div>

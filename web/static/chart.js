@@ -2,6 +2,7 @@
 // library. [data-chart] is the full chart (axes, tabs, readout); with
 // [data-mini] it is a sparkline. Points are averaged down to the width and
 // drawn as smooth curves: download as a filled area, upload as a line.
+// Blocked lookups and connections are red bars along the bottom.
 (function () {
   var NS = "http://www.w3.org/2000/svg", uid = 0;
 
@@ -31,9 +32,9 @@
   function reduce(pts, step, max) {
     var g = Math.max(1, Math.ceil(pts.length / max)), out = [];
     for (var i = 0; i < pts.length; i += g) {
-      var d = 0, u = 0, n = 0;
-      for (var j = i; j < Math.min(i + g, pts.length); j++, n++) { d += pts[j][1]; u += pts[j][2]; }
-      out.push({ t: pts[i][0], down: d * 8 / (n * step), up: u * 8 / (n * step) });
+      var d = 0, u = 0, b = 0, n = 0;
+      for (var j = i; j < Math.min(i + g, pts.length); j++, n++) { d += pts[j][1]; u += pts[j][2]; b += pts[j][3] || 0; }
+      out.push({ t: pts[i][0], down: d * 8 / (n * step), up: u * 8 / (n * step), blocks: b });
     }
     return out;
   }
@@ -96,6 +97,16 @@
     }
     svg.appendChild(el("path", { d: down + base, fill: "url(#" + id + "d)" }));
     svg.appendChild(el("path", { d: up + base, fill: "url(#" + id + "u)" }));
+    // blocked events: bars up to a quarter of the plot (own scale)
+    var maxB = Math.max.apply(null, pts.map(function (p) { return p.blocks; }).concat([0]));
+    if (maxB > 0) {
+      var bw = Math.max(2, (W - padL) / Math.max(n, 1) * 0.5), bh = (H - padT - padB) * (mini ? 0.45 : 0.25);
+      pts.forEach(function (p, i) {
+        if (!p.blocks) return;
+        var h = Math.max(2, bh * p.blocks / maxB);
+        svg.appendChild(el("rect", { x: Math.max(padL, Math.min(W - bw, x(i) - bw / 2)), y: y(0) - h, width: bw, height: h, rx: 1, class: "blk" }));
+      });
+    }
     svg.appendChild(el("path", { d: down, class: "stroke down" }));
     svg.appendChild(el("path", { d: up, class: "stroke up" }));
     plot.replaceChildren(svg);
@@ -112,7 +123,8 @@
       cursor.setAttribute("x1", x(i)); cursor.setAttribute("x2", x(i));
       dotD.setAttribute("cx", x(i)); dotD.setAttribute("cy", y(pts[i].down));
       dotU.setAttribute("cx", x(i)); dotU.setAttribute("cy", y(pts[i].up));
-      tip.textContent = when(pts[i].t, Math.min(span, 7 * 86400)) + " · ↓ " + bits(pts[i].down) + " · ↑ " + bits(pts[i].up);
+      tip.textContent = when(pts[i].t, Math.min(span, 7 * 86400)) + " · ↓ " + bits(pts[i].down) + " · ↑ " + bits(pts[i].up) +
+        (pts[i].blocks ? " · " + pts[i].blocks + " " + (box.dataset.blocked || "blocked") : "");
     }
     svg.addEventListener("pointermove", show);
     svg.addEventListener("pointerdown", show);

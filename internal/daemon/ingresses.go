@@ -17,6 +17,21 @@ type IngressOptions struct {
 	DisableCookies *bool   `json:"disable_cookies,omitempty"`
 	ContentPadding *bool   `json:"content_padding,omitempty"`
 	NewClientsAWG3 *bool   `json:"new_clients_awg3,omitempty"`
+	// Admin lets its clients open the admin UI (adds or removes the
+	// interface in server.admin_interfaces). New ingresses: on unless isolated.
+	Admin *bool `json:"admin,omitempty"`
+}
+
+// setAdmin adds or removes iface in the admin interfaces.
+func setAdmin(c *config.Config, iface string, on bool) {
+	s := &c.Server
+	has := slices.Contains(s.AdminInterfaces, iface)
+	switch {
+	case on && !has:
+		s.AdminInterfaces = append(s.AdminInterfaces, iface)
+	case !on && has:
+		s.AdminInterfaces = slices.DeleteFunc(s.AdminInterfaces, func(i string) bool { return i == iface })
+	}
 }
 
 func (o IngressOptions) apply(in *config.Ingress) {
@@ -60,9 +75,8 @@ func nextPort(c *config.Config) uint16 {
 	return p
 }
 
-// AddIngress creates an ingress with new camouflage parameters. Unless it
-// is isolated, its clients may also open the admin UI, like those of the
-// first ingress.
+// AddIngress creates an ingress with new camouflage parameters. Its clients
+// may open the admin UI unless it is isolated or o.Admin says otherwise.
 func (d *Daemon) AddIngress(name string, o IngressOptions) error {
 	err := d.update(func(c *config.Config) error {
 		if err := config.ValidateName(name); err != nil {
@@ -74,9 +88,11 @@ func (d *Daemon) AddIngress(name string, o IngressOptions) error {
 		in := config.Ingress{Name: name, Interface: c.NextIngressIface(), ListenPort: nextPort(c),
 			AWG: ingress.GenerateParams(ingress.NewRand())}
 		o.apply(&in)
-		if !in.Isolated {
-			c.Server.AdminInterfaces = append(c.Server.AdminInterfaces, in.Interface)
+		admin := !in.Isolated
+		if o.Admin != nil {
+			admin = *o.Admin
 		}
+		setAdmin(c, in.Interface, admin)
 		c.Ingresses = append(c.Ingresses, in)
 		return nil
 	})
@@ -95,6 +111,9 @@ func (d *Daemon) SetIngress(name string, o IngressOptions) error {
 			return fmt.Errorf("unknown ingress %q", name)
 		}
 		o.apply(in)
+		if o.Admin != nil {
+			setAdmin(c, in.Interface, *o.Admin)
+		}
 		return nil
 	})
 	if err == nil {
@@ -122,8 +141,7 @@ func (d *Daemon) RemoveIngress(name string) error {
 		if len(users) > 0 {
 			return fmt.Errorf("ingress %q is used by clients %v: move or remove them first", name, users)
 		}
-		iface := in.Interface
-		c.Server.AdminInterfaces = slices.DeleteFunc(c.Server.AdminInterfaces, func(i string) bool { return i == iface })
+		setAdmin(c, in.Interface, false)
 		c.Ingresses = slices.DeleteFunc(c.Ingresses, func(x config.Ingress) bool { return x.Name == name })
 		return nil
 	})

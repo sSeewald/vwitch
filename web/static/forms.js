@@ -98,6 +98,11 @@
   // filters that apply on change
   document.addEventListener("change", function (e) {
     if (e.target.matches("select[data-autosubmit]")) e.target.form.requestSubmit();
+    // a new isolated ingress gets no admin access unless switched on again
+    if (e.target.matches("form[action='/ingresses'] input[name=isolated]")) {
+      var adm = e.target.form.querySelector("input[name=admin]");
+      if (adm) adm.checked = !e.target.checked;
+    }
     // a new client's AWG 3.1 switch follows the default of the chosen ingress
     if (e.target.matches("select[data-ingress]")) {
       var o = e.target.selectedOptions[0], sw = e.target.form.querySelector("label[data-awg3]");

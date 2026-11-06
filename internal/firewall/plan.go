@@ -36,7 +36,8 @@ const (
 	DNAT       Verdict = "dnat"
 	Masquerade Verdict = "masquerade"
 	Reject     Verdict = "reject"
-	Log        Verdict = "log" // rate limited nflog, the rule continues
+	RejectTCP  Verdict = "reject with tcp reset" // needs a TCP match
+	Log        Verdict = "log"                   // rate limited nflog, the rule continues
 )
 
 // IP protocol numbers.

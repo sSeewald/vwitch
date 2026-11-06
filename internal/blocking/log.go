@@ -11,8 +11,8 @@ type Event struct {
 	Time     time.Time  `json:"time"`
 	Source   string     `json:"source"`
 	Client   string     `json:"client,omitempty"` // client name, empty for incoming
-	Domain   string     `json:"domain,omitempty"` // blocked DNS name
-	Addr     netip.Addr `json:"addr,omitzero"`    // remote address of a blocked connection
+	Domain   string     `json:"domain,omitempty"` // blocked DNS name, or the name a blocked address was looked up as
+	Addr     netip.Addr `json:"addr,omitzero"`    // remote address of a blocked connection (unset for DNS blocks)
 	Port     uint16     `json:"port,omitempty"`
 	Proto    string     `json:"proto,omitempty"`
 	Country  string     `json:"country,omitempty"`

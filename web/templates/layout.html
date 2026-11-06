@@ -80,13 +80,13 @@
 
 {{define "traffic-chart"}}{{$l := index . 0}}{{$range := index . 1}}{{$client := index . 2}}
 <div class="chart" data-chart{{if index . 3}} data-nav{{end}} data-src="/traffic" data-range="{{$range}}" data-client="{{$client}}"
-  data-down="{{t $l "act.down"}}" data-up="{{t $l "act.up"}}">
+  data-down="{{t $l "act.down"}}" data-up="{{t $l "act.up"}}" data-blocked="{{t $l "act.blocked_events"}}">
   <div class="row chart-head">
     <h3>{{t $l "act.traffic"}}{{with $client}} · {{.}}{{end}}</h3><span class="spacer"></span>
     <div class="tabs small" role="tablist">{{range $o := list "1h" "24h" "7d" "30d"}}<button type="button" class="tab" data-range="{{$o}}" role="tab" aria-selected="{{eq $o $range}}">{{$o}}</button>{{end}}</div>
   </div>
   <div class="chart-plot" aria-label="{{t $l "act.traffic"}}"></div>
-  <p class="legend small"><span class="key down"></span>{{t $l "act.down"}} <span class="key up"></span>{{t $l "act.up"}} <span class="muted chart-tip"></span></p>
+  <p class="legend small"><span class="key down"></span>{{t $l "act.down"}} <span class="key up"></span>{{t $l "act.up"}} <span class="key blk"></span>{{t $l "act.blocked_events"}} <span class="muted chart-tip"></span></p>
 </div>
 {{end}}
 

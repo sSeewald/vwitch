@@ -10,11 +10,14 @@ import (
 // Counter is a pair of byte counts as seen from the client: Down was sent
 // to it, Up came from it.
 type Counter struct {
-	Down int64 `json:"d"`
-	Up   int64 `json:"u"`
+	Down   int64 `json:"d"`
+	Up     int64 `json:"u"`
+	Blocks int64 `json:"b,omitempty"` // blocked lookups and connections
 }
 
-func (c Counter) add(o Counter) Counter { return Counter{c.Down + o.Down, c.Up + o.Up} }
+func (c Counter) add(o Counter) Counter {
+	return Counter{c.Down + o.Down, c.Up + o.Up, c.Blocks + o.Blocks}
+}
 
 // Range is one zoom level of the traffic history.
 type Range struct {
@@ -70,7 +73,7 @@ func (t *Traffic) Observe(now time.Time, cumulative map[string]Counter) {
 		if !known {
 			continue
 		}
-		d := Counter{grow(prev.Down, cur.Down), grow(prev.Up, cur.Up)}
+		d := Counter{Down: grow(prev.Down, cur.Down), Up: grow(prev.Up, cur.Up)}
 		if d == (Counter{}) {
 			continue
 		}
@@ -80,6 +83,18 @@ func (t *Traffic) Observe(now time.Time, cumulative map[string]Counter) {
 	if total != (Counter{}) {
 		t.add(Total, now, total)
 	}
+	t.prune(now)
+}
+
+// Blocked counts one blocked lookup or connection of client ("" when no
+// client is involved, e.g. an incoming connection) and in the total.
+func (t *Traffic) Blocked(client string, now time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if client != Total {
+		t.add(client, now, Counter{Blocks: 1})
+	}
+	t.add(Total, now, Counter{Blocks: 1})
 	t.prune(now)
 }
 

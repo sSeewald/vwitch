@@ -323,7 +323,7 @@
   "ingress.opt.strict": "Nur AWG 3.1 (Header Protection)",
   "ingress.opt.strict.hint": "Verschlüsselt die Paket-Header und hängt zufällige Bytes an. Stärkste Tarnung, aber nur Apps mit AWG 3.1 kommen rein.",
   "ingress.opt.isolated": "Isoliert",
-  "ingress.opt.isolated.hint": "Seine Clients erreichen keine anderen Clients und sind für sie nicht erreichbar. Ein neuer isolierter Eingang bekommt keinen Zugriff auf die Admin-UI (siehe Einstellungen → Admin-Schnittstellen).",
+  "ingress.opt.isolated.hint": "Seine Clients erreichen keine anderen Clients und sind für sie nicht erreichbar. Ein neuer isolierter Eingang startet ohne Zugriff auf die Admin-UI.",
   "ingress.opt.new_clients_awg3": "AmneziaWG 3.1 für neue Clients",
   "ingress.opt.new_clients_awg3.hint": "Neue Clients auf diesem Eingang bekommen standardmäßig die AWG-3.1-Config. Beim Anlegen oder später pro Client weiterhin abschaltbar.",
   "ingress.opt.content_padding": "Zufälliges Padding",
@@ -341,5 +341,10 @@
   "client.pinned.strategy.hint": "Dieser Client hat eine eigene Strategie statt der aus den Einstellungen.",
   "portal.state.paused": "Pausiert",
   "portal.title.paused": "Dein Verkehr ist pausiert",
-  "portal.text.paused": "Der Verkehr dieses Geräts wurde pausiert, von dir oder vom Administrator. Nichts geht raus, bis er fortgesetzt wird."
+  "portal.text.paused": "Der Verkehr dieses Geräts wurde pausiert, von dir oder vom Administrator. Nichts geht raus, bis er fortgesetzt wird.",
+  "act.region_blocked": "Land gesperrt",
+  "act.region_blocked.hint": "Verbindungen zu seiner Adresse in %s hat die Ländersperre blockiert.",
+  "act.blocked_events": "gesperrt",
+  "ingress.opt.admin": "Admin-UI erreichbar",
+  "ingress.opt.admin.hint": "Seine Clients können die Admin-UI unter https://v.witch öffnen (weiterhin mit Login)."
 }

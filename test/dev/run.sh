@@ -51,19 +51,20 @@ awk -v now="$(date +%s)" 'BEGIN {
   for (r = 1; r <= 4; r++) {
     split(rs[r], f, ":"); step = f[2]; n = f[3] / step; end = now - now % step
     printf "%s\"%s\":{", (r > 1 ? "," : ""), f[1]
-    delete td; delete tu
+    delete td; delete tu; delete tb
     for (c = 1; c <= 3; c++) {
       printf "%s\"%s\":{", (c > 1 ? "," : ""), cs[c]
       for (i = 0; i < n; i++) {
         t = end - i * step; h = (t % 86400) / 3600
         base = w[cs[c]] * 20000 * step * (1.2 + sin((h - 14) / 24 * 6.283)) * (0.4 + rand())
         d = int(base); u = int(base * (0.08 + rand() * 0.1)); td[t] += d; tu[t] += u
-        printf "%s\"%d\":{\"d\":%d,\"u\":%d}", (i ? "," : ""), t, d, u
+        b = (rand() < 0.06) ? 1 + int(rand() * 6) : 0; tb[t] += b # blocked events, now and then
+        printf "%s\"%d\":{\"d\":%d,\"u\":%d,\"b\":%d}", (i ? "," : ""), t, d, u, b
       }
       printf "}"
     }
     printf ",\"\":{"; k = 0
-    for (t in td) printf "%s\"%s\":{\"d\":%d,\"u\":%d}", (k++ ? "," : ""), t, td[t], tu[t]
+    for (t in td) printf "%s\"%s\":{\"d\":%d,\"u\":%d,\"b\":%d}", (k++ ? "," : ""), t, td[t], tu[t], tb[t]
     printf "}}"
   }
   printf "}}\n"

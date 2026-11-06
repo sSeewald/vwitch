@@ -86,21 +86,22 @@ func TestAllPagesRender(t *testing.T) {
 			Geo: daemon.GeoStatus{Ranges: 3, Updated: time.Now()},
 			Log: blockLog{Events: []blocking.Event{
 				{Time: time.Now(), Source: blocking.SourceCustom, Client: "phone", Domain: "ads.example"},
-				{Time: time.Now(), Source: blocking.SourceRegion, Addr: netip.MustParseAddr("192.0.2.1"), Port: 443, Proto: "tcp", Country: "RU"},
+				{Time: time.Now(), Source: blocking.SourceRegion, Addr: netip.MustParseAddr("192.0.2.1"), Port: 443, Proto: "tcp", Country: "RU", Domain: "www.mail.ru"},
 				{Time: time.Now(), Source: blocking.SourceRegion, Addr: netip.MustParseAddr("192.0.2.2"), Country: "CN", Incoming: true}}}}
 		w = httptest.NewRecorder()
 		r.Page(w, "security", Page{Lang: lang, Admin: true, Nav: nav, Path: "/security", Data: sec})
 		if b := w.Body.String(); w.Code != 200 || !strings.Contains(b, "ads.example") || !strings.Contains(b, "🇷🇺") ||
-			!strings.Contains(b, `value="DE" checked`) || untranslated.MatchString(b) {
+			!strings.Contains(b, `value="DE" checked`) || !strings.Contains(b, "www.mail.ru") || untranslated.MatchString(b) {
 			t.Fatalf("security page: %s", b)
 		}
 		act := activityPage{Config: cfg, Ranges: activity.Ranges, Range: "24h",
-			Totals:  []clientTraffic{{Name: "phone", Bytes: activity.Counter{Down: 5e6, Up: 1e6}, Share: 100}},
-			Domains: []activity.DomainStat{{Domain: "ads.example", Queries: 3, Blocked: 3, Clients: []string{"phone"}, Last: time.Now(), Names: []string{"x.ads.example"}}},
+			Totals: []clientTraffic{{Name: "phone", Bytes: activity.Counter{Down: 5e6, Up: 1e6}, Share: 100}},
+			Domains: []activity.DomainStat{{Domain: "ads.example", Queries: 3, Blocked: 3, Clients: []string{"phone"}, Last: time.Now(), Names: []string{"x.ads.example"}},
+				{Domain: "mail.ru", Queries: 2, Clients: []string{"phone"}, Last: time.Now(), Country: "RU"}},
 			Blocked: map[string]bool{"ads.example": true}, RouteOf: map[string]string{}, Back: "/activity?range=24h"}
 		w = httptest.NewRecorder()
 		r.Page(w, "activity", Page{Lang: lang, Admin: true, Nav: nav, Path: "/activity", Data: act})
-		if b := w.Body.String(); w.Code != 200 || !strings.Contains(b, "x.ads.example") || !strings.Contains(b, "data-chart data-nav") || untranslated.MatchString(b) {
+		if b := w.Body.String(); w.Code != 200 || !strings.Contains(b, "x.ads.example") || !strings.Contains(b, "data-chart data-nav") || !strings.Contains(b, "🇷🇺") || untranslated.MatchString(b) {
 			t.Fatalf("activity page: %s", b)
 		}
 		cfg.Security = config.Security{}

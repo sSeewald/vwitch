@@ -21,8 +21,8 @@ func ingressCmd(g *globals) *cobra.Command {
 			"clients apart from all other clients."}
 
 	var (
-		port                                     uint16
-		strict, isolated, cookies, padding, awg3 bool
+		port                                            uint16
+		strict, isolated, cookies, padding, awg3, admin bool
 	)
 	opts := func(c *cobra.Command) daemon.IngressOptions {
 		o := daemon.IngressOptions{}
@@ -31,7 +31,7 @@ func ingressCmd(g *globals) *cobra.Command {
 			o.ListenPort = &port
 		}
 		for name, dst := range map[string]**bool{"strict": &o.Strict, "isolated": &o.Isolated,
-			"padding": &o.ContentPadding, "new-clients-awg3": &o.NewClientsAWG3} {
+			"padding": &o.ContentPadding, "new-clients-awg3": &o.NewClientsAWG3, "admin": &o.Admin} {
 			if f.Changed(name) {
 				v, _ := f.GetBool(name)
 				*dst = &v
@@ -50,6 +50,7 @@ func ingressCmd(g *globals) *cobra.Command {
 		c.Flags().BoolVar(&cookies, "cookies", true, "send WireGuard cookie replies under load")
 		c.Flags().BoolVar(&padding, "padding", false, "random padding of data packets")
 		c.Flags().BoolVar(&awg3, "new-clients-awg3", true, "new clients get the AWG 3.1 config by default")
+		c.Flags().BoolVar(&admin, "admin", true, "its clients may open the admin UI (new ingresses: on unless --isolated)")
 	}
 
 	add := &cobra.Command{

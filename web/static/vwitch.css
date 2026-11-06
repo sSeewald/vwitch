@@ -449,3 +449,6 @@ button.menu-item:disabled { opacity: 1; color: var(--ok); font-weight: 700; }
 /* a manual connection choice: a small pin instead of the dot */
 .pill.pin { color: var(--text); }
 .pill.pin::before { width: 7px; height: 7px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent); }
+/* blocked lookups and connections in the traffic charts */
+[data-chart] .blk { fill: var(--bad); opacity: .85; }
+.legend .key.blk { background: var(--bad); margin-left: 10px; height: 8px; width: 4px; }

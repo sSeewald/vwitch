@@ -97,10 +97,10 @@ They **cannot** reach clients of any other ingress, and no other client can
 reach them. Clients of non-isolated ingresses can still reach each other
 across ingresses.
 
-Admin access is decided when the ingress is created: a non-isolated ingress
-is added to the admin interfaces, an isolated one is not. To change this
-later, edit **Admin interfaces** under **Settings** (for example add or
-remove `awg2`).
+Admin access is a switch per ingress: **Admin UI reachable** in its options
+(`vwitch ingress set guests --admin` or `--admin=false`). A new ingress has it
+on, a new isolated one off; both can be changed at any time, also for
+`default`. Isolation between clients stays as it is.
 
 ## Assign clients to an ingress
 

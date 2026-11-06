@@ -520,6 +520,30 @@ func TestIngresses(t *testing.T) {
 		t.Fatalf("ingresses %v, peers %v", sys.ingresses, sys.peers)
 	}
 
+	// admin access per ingress: switch it on for the isolated one, off for the open one
+	off := false
+	if err := d.SetIngress("strict", IngressOptions{Admin: &on}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetIngress("open", IngressOptions{Admin: &off}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetIngress("open", IngressOptions{Admin: &off}); err != nil { // idempotent
+		t.Fatal(err)
+	}
+	if ai := d.Config().Server.AdminInterfaces; !slices.Contains(ai, "awg1") || slices.Contains(ai, "awg2") || !slices.Contains(ai, "awg0") {
+		t.Fatalf("admin interfaces after toggles: %v", ai)
+	}
+	if err := d.AddIngress("quiet", IngressOptions{Admin: &off}); err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := d.Config().Ingress("quiet"); slices.Contains(d.Config().Server.AdminInterfaces, q.Interface) {
+		t.Fatal("explicit admin off ignored on add")
+	}
+	if err := d.RemoveIngress("quiet"); err != nil {
+		t.Fatal(err)
+	}
+
 	// in use: cannot be removed until the client moves
 	if err := d.RemoveIngress("strict"); err == nil {
 		t.Fatal("removed an ingress with clients")
@@ -534,8 +558,8 @@ func TestIngresses(t *testing.T) {
 	if err := d.RemoveIngress("open"); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(d.Config().Server.AdminInterfaces, "awg2") {
-		t.Fatal("admin interface of a removed ingress kept")
+	if ai := d.Config().Server.AdminInterfaces; slices.Contains(ai, "awg1") || slices.Contains(ai, "awg2") {
+		t.Fatalf("admin interface of a removed ingress kept: %v", ai)
 	}
 	if err := d.RemoveIngress(config.DefaultIngress); err == nil {
 		t.Fatal("removed the last ingress")

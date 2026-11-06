@@ -87,9 +87,15 @@ func (p BlockPlan) Build() ([]Set, []Rule) {
 			rules = append(rules, log, r)
 		}
 		if f.Outgoing { // clients have no IPv6, it is dropped elsewhere
+			// rejected, not dropped, so apps fail at once: TCP gets a reset
+			// (browsers give up immediately), everything else ICMP
 			for _, awg := range p.AWGIfaces {
-				hit(Rule{Chain: ChainForward, IIF: awg, CtNew: true,
-					Set: &SetMatch{Set: name + "_v4", Dst: true, Invert: f.Allow}}, false, Reject)
+				r := Rule{Chain: ChainForward, IIF: awg, CtNew: true,
+					Set: &SetMatch{Set: name + "_v4", Dst: true, Invert: f.Allow}}
+				tcp := r
+				tcp.Proto = ProtoTCP
+				hit(tcp, false, RejectTCP)
+				hit(r, false, Reject)
 			}
 		}
 		if f.Incoming {

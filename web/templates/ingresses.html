@@ -23,6 +23,7 @@
             <input id="port-{{.Name}}" name="listen_port" type="number" min="1" max="65535" value="{{.ListenPort}}" required inputmode="numeric">
             <p class="hint">{{t $l "settings.listen_port.hint"}}</p></div>
           {{template "ingress-switch" (list $l "isolated" (print .Isolated))}}
+          {{template "ingress-switch" (list $l "admin" (print .Status.Admin))}}
           {{template "ingress-switch" (list $l "new_clients_awg3" (print $a.NewClientsAWG3))}}
           {{template "ingress-switch" (list $l "content_padding" (print (ne $a.ContentPadding "")))}}
           {{template "ingress-switch" (list $l "disable_cookies" (print $a.DisableCookies))}}
@@ -51,6 +52,7 @@
     <p class="hint">{{t $l "ingress.port.hint"}}</p></div>
   {{template "ingress-switch" (list $l "strict" "false")}}
   {{template "ingress-switch" (list $l "isolated" "false")}}
+  {{template "ingress-switch" (list $l "admin" "true")}}
   <button>{{t $l "ingress.add"}}</button>
 </form>
 {{end}}
