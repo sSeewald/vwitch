@@ -154,6 +154,7 @@ sleep 1
 SRC=$(ip netns exec client curl -s --max-time 3 http://198.51.100.1/ || true)
 [ -z "$SRC" ] && ok "kill switch blocks traffic" || bad "kill switch leaked: '$SRC'"
 check "kill switch: dns refused" sh -c 'ip netns exec client dig +time=2 @10.8.0.1 example.org | grep -q REFUSED'
+check "admin UI stays reachable (kill switch)" sh -c 'ip netns exec client curl -sk --max-time 5 --resolve v.witch:443:10.8.0.1 https://v.witch/login | grep -q current-password'
 vwitch killswitch off
 
 echo "== exit failure -> offline policy ask (captive portal)"
@@ -168,6 +169,7 @@ vwitch set offline block
 wait_for sh -c 'vwitch status | grep -q "phone.*block"' && ok "client blocked" || bad "client blocked"
 SRC=$(ip netns exec client curl -s --max-time 3 http://198.51.100.1/ || true)
 [ -z "$SRC" ] && ok "no leak while blocked" || bad "leak while blocked: '$SRC'"
+check "admin UI stays reachable (no egress works)" sh -c 'ip netns exec client curl -sk --max-time 5 --resolve v.witch:443:10.8.0.1 https://v.witch/login | grep -q current-password'
 vwitch set offline ask
 ip -n home link set wg0 up
 wait_for sh -c 'vwitch status | grep -q "phone.*home"' && ok "client returns to home" || bad "client returns to home"

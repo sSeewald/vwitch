@@ -86,7 +86,7 @@
   "settings.resolver": "Public DNS resolver",
   "settings.hostnames": "Web address for clients",
   "settings.hostnames.hint": "Clients open http://<first name>. Separate several names with commas.",
-  "settings.portal_actions": "Switches clients may use",
+  "settings.portal_actions": "What clients may switch on their own page",
   "settings.admin_interfaces": "Interfaces allowed to reach this admin page",
   "settings.lockdown_ssh": "Allow SSH only on these interfaces (never awg0) once e.g. wt0 is up",
   "settings.security": "Security",
@@ -228,5 +228,8 @@
   "route.name.placeholder": "e.g. streaming",
   "event.route_added": "Route %s via %s added",
   "event.route_changed": "Route %s changed (via %s)",
-  "event.route_removed": "Route %s removed"
+  "event.route_removed": "Route %s removed",
+  "settings.portal_actions.hint": "Does not switch anything right away. Only sets which switches each client sees on its own page (http://v.witch). Direct mode switches appear only if the server's own connection is allowed.",
+  "settings.language": "Default language",
+  "settings.language.hint": "For clients and browsers without their own choice. Switch the language of this page with DE/EN at the top."
 }

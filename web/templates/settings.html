@@ -20,9 +20,11 @@
       {{range $o := list "fast" "direct" "block"}}
       <label class="check"><span>{{t $l (print "settings.action." $o)}}</span><input class="switch" type="checkbox" name="portal_actions" value="{{$o}}" {{if hasAction $c.Web.Portal.Actions $o}}checked{{end}}></label>
       {{end}}
+      <p class="hint">{{t $l "settings.portal_actions.hint"}}</p>
     </fieldset>
-    <div class="field"><label for="s11">{{t $l "language"}}</label>
-      <select id="s11" name="language">{{range $.Langs}}<option value="{{.}}" {{if eq . $c.Web.Language}}selected{{end}}>{{t $l (print "lang." .)}}</option>{{end}}</select></div>
+    <div class="field"><label for="s11">{{t $l "settings.language"}}</label>
+      <select id="s11" name="language">{{range $.Langs}}<option value="{{.}}" {{if eq . $c.Web.Language}}selected{{end}}>{{t $l (print "lang." .)}}</option>{{end}}</select>
+      <p class="hint">{{t $l "settings.language.hint"}}</p></div>
   </section>
 
   <section class="card stack">
