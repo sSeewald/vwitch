@@ -312,6 +312,10 @@ check "dns works on the second ingress" sh -c 'ip netns exec client2 dig +short 
 check "isolated: no traffic from other clients" sh -c '! ip netns exec client ping -c1 -W2 10.8.0.4'
 check "isolated: no traffic to other clients" sh -c '! ip netns exec client2 ping -c1 -W2 10.8.0.3'
 check "isolated ingress cannot open the admin UI" sh -c '! ip netns exec client2 curl -sk --max-time 3 https://10.8.0.1/login | grep -q current-password'
+vwitch ingress set secure --admin
+check "admin option opens the admin UI for an isolated ingress" sh -c 'ip netns exec client2 curl -sk --max-time 5 https://10.8.0.1/login | grep -q current-password'
+check "isolation stays with admin access" sh -c '! ip netns exec client2 ping -c1 -W2 10.8.0.3'
+vwitch ingress set secure --admin=false
 vwitch ingress set secure --isolated=false
 sleep 2
 check "not isolated: clients reach each other across ingresses" ip netns exec client ping -c1 -W2 10.8.0.4

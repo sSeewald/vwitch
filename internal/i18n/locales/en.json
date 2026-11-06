@@ -323,7 +323,7 @@
   "ingress.opt.strict": "AWG 3.1 only (header protection)",
   "ingress.opt.strict.hint": "Encrypts the packet headers and appends random bytes. Strongest camouflage, but only apps with AWG 3.1 can connect.",
   "ingress.opt.isolated": "Isolated",
-  "ingress.opt.isolated.hint": "Its clients cannot reach other clients and cannot be reached by them. A new isolated ingress gets no access to the admin UI (see Settings → admin interfaces).",
+  "ingress.opt.isolated.hint": "Its clients cannot reach other clients and cannot be reached by them. A new isolated ingress starts without admin UI access.",
   "ingress.opt.new_clients_awg3": "AmneziaWG 3.1 for new clients",
   "ingress.opt.new_clients_awg3.hint": "New clients on this ingress get the AWG 3.1 config by default. Can still be turned off when adding a client or later per client.",
   "ingress.opt.content_padding": "Random padding",
@@ -344,5 +344,7 @@
   "portal.text.paused": "This device's traffic was paused, by you or by the administrator. Nothing leaves until it is resumed.",
   "act.region_blocked": "country blocked",
   "act.region_blocked.hint": "Connections to its address in %s were blocked by the country filter.",
-  "act.blocked_events": "blocked"
+  "act.blocked_events": "blocked",
+  "ingress.opt.admin": "Admin UI reachable",
+  "ingress.opt.admin.hint": "Its clients can open the admin UI at https://v.witch (still behind the login)."
 }

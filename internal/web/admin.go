@@ -753,7 +753,7 @@ func ingressOptions(r *http.Request) (daemon.IngressOptions, error) {
 	if err := r.ParseForm(); err != nil {
 		return o, err
 	}
-	o.Strict, o.Isolated = flag("strict"), flag("isolated")
+	o.Strict, o.Isolated, o.Admin = flag("strict"), flag("isolated"), flag("admin")
 	o.DisableCookies, o.ContentPadding, o.NewClientsAWG3 = flag("disable_cookies"), flag("content_padding"), flag("new_clients_awg3")
 	return o, nil
 }
