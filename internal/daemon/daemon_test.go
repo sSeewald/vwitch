@@ -2,9 +2,17 @@ package daemon
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"io"
 	"log/slog"
+	"math/big"
+	"net"
 	"net/netip"
 	"slices"
 	"strings"
@@ -14,6 +22,7 @@ import (
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
+	"github.com/sseewald/vwitch/internal/certs"
 	"github.com/sseewald/vwitch/internal/config"
 	"github.com/sseewald/vwitch/internal/egress"
 	"github.com/sseewald/vwitch/internal/exposure"
@@ -456,6 +465,38 @@ func TestCertFollowsHostnames(t *testing.T) {
 	cert, err := d.Certificate()
 	if err != nil || cert.VerifyHostname("wgx.netbird.cloud") != nil || cert.VerifyHostname("203.0.113.1") != nil {
 		t.Fatalf("certificate does not cover the new name: %v", err)
+	}
+}
+
+// Certificates from older versions span more than Apple devices accept;
+// EnsureTLS replaces them.
+func TestCertTooLongRenewed(t *testing.T) {
+	d, _, _ := setup(t)
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	now := time.Now()
+	tpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "v.witch", Organization: []string{certs.Organization}},
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(825 * 24 * time.Hour)}
+	for _, n := range certNames(d.Config()) {
+		if ip := net.ParseIP(n); ip != nil {
+			tpl.IPAddresses = append(tpl.IPAddresses, ip)
+		} else {
+			tpl.DNSNames = append(tpl.DNSNames, n)
+		}
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kder, _ := x509.MarshalPKCS8PrivateKey(key)
+	if err := d.InstallTLS(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
+		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: kder})); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.EnsureTLS(); err != nil {
+		t.Fatal(err)
+	}
+	if cert, err := d.Certificate(); err != nil || certs.TooLong(cert) {
+		t.Fatalf("certificate not replaced: %v", err)
 	}
 }
 

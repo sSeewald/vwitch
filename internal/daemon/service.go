@@ -388,6 +388,8 @@ func (d *Daemon) EnsureTLS() error {
 		d.log.Warn("admin certificate unusable, generating a self-signed one", "err", err)
 	case cert == nil:
 	case certs.IsSelfSigned(cert) && d.now().Add(certs.Renew).After(cert.NotAfter):
+	case certs.IsSelfSigned(cert) && certs.TooLong(cert):
+		// Apple devices refuse a certificate valid for longer than allowed
 	case certs.IsSelfSigned(cert) && !certs.Covers(cert, certNames(d.Config())):
 		// hostnames or endpoint changed: the browser should see the new name
 	default:
