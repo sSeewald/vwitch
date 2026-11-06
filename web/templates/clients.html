@@ -4,7 +4,7 @@
   {{range .Data.Status.Clients}}
     <li class="row">
       <div>
-        <h3 class="with-camo"><a href="/clients/{{.Name}}">{{.Name}}</a>{{template "camo" (withLang $l .)}}</h3>
+        <h3 class="with-camo">{{template "camo" (withLang $l .)}}<a href="/clients/{{.Name}}">{{.Name}}</a></h3>
         <p class="muted small mono">{{.Address}}{{if .Expires}} · {{t $l "client.expires"}} {{(lastDay .Expires).Format "02.01.2006"}}{{end}}</p>
       </div>
       <span class="spacer"></span>
