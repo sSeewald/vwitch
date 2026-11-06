@@ -340,10 +340,14 @@ func (d *Daemon) InstallTLS(certPEM, keyPEM []byte) error {
 
 // ResetTLS replaces the admin certificate with a fresh self-signed one.
 // The admin UI is HTTPS only, so this is what "remove certificate" means.
-func (d *Daemon) ResetTLS() error {
-	c := d.Config()
+// certNames are the names a self-signed admin certificate covers.
+func certNames(c *config.Config) []string {
 	names := append([]string{}, c.Web.Hostnames...)
-	names = append(names, c.Server.Endpoint, "localhost", "127.0.0.1", c.ServerIP().String())
+	return append(names, c.Server.Endpoint, "localhost", "127.0.0.1", c.ServerIP().String())
+}
+
+func (d *Daemon) ResetTLS() error {
+	names := certNames(d.Config())
 	certPEM, keyPEM, err := certs.SelfSigned(names, d.now())
 	if err != nil {
 		return err
@@ -368,6 +372,8 @@ func (d *Daemon) EnsureTLS() error {
 		d.log.Warn("admin certificate unusable, generating a self-signed one", "err", err)
 	case cert == nil:
 	case certs.IsSelfSigned(cert) && d.now().Add(certs.Renew).After(cert.NotAfter):
+	case certs.IsSelfSigned(cert) && !certs.Covers(cert, certNames(d.Config())):
+		// hostnames or endpoint changed: the browser should see the new name
 	default:
 		return nil
 	}
@@ -401,7 +407,7 @@ func (d *Daemon) Set(key, value string) error {
 // SetMany applies several settings as one change: they are validated
 // together, so dependent settings (allow_direct and offline) can change at once.
 func (d *Daemon) SetMany(kv [][2]string) error {
-	return d.update(func(c *config.Config) error {
+	err := d.update(func(c *config.Config) error {
 		var errs []error
 		for _, p := range kv {
 			if err := set(c, p[0], strings.TrimSpace(p[1])); err != nil {
@@ -410,6 +416,12 @@ func (d *Daemon) SetMany(kv [][2]string) error {
 		}
 		return errors.Join(errs...)
 	})
+	if err == nil {
+		if terr := d.EnsureTLS(); terr != nil { // new hostnames or endpoint
+			d.log.Warn("admin certificate", "err", terr)
+		}
+	}
+	return err
 }
 
 func set(c *config.Config, key, value string) error {
