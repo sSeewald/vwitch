@@ -41,6 +41,9 @@ Open **Ingresses** in the admin UI and fill in the form at the bottom:
 3. **AWG 3.1 only (header protection)** (optional): see
    [Camouflage](#camouflage) below.
 4. **Isolated** (optional): see [Isolation](#isolation) below.
+5. **Admin UI reachable**: whether its clients may open the admin UI at
+   https://v.witch (always behind the login). On by default; turning on
+   *Isolated* turns it off, but you can switch it back on.
 
 vwitch generates fresh, random camouflage parameters for every new ingress,
 creates its interface and starts listening right away.
@@ -59,6 +62,7 @@ Expand **Options** on an ingress to change it:
 | --- | --- | --- |
 | **AmneziaWG port (UDP)** | The UDP port of this ingress. | Yes |
 | **Isolated** | See [Isolation](#isolation). | No |
+| **Admin UI reachable** | Its clients can open the admin UI at https://v.witch (still behind the login). | No |
 | **AmneziaWG 3.1 for new clients** | New clients of this ingress get configs with the AmneziaWG 3.1 lines. Turn it off if most of its clients use apps without AWG 3.1 support. You can still choose per client. | No (only affects new clients) |
 | **Random padding** | Data packets get a random length instead of a multiple of 16 bytes. The padding sits inside the encryption. Clients with AWG 3.1 pad their own packets too. Works with every client. | No |
 | **No cookie replies** | Under load the server never sends WireGuard's recognisable cookie packets. Works with every client. Downside: less protection against handshake floods. | No |
@@ -134,6 +138,7 @@ vwitch ingress add travel --strict               # next free port, AWG 3.1 only
 vwitch ingress add guests --port 51847 --isolated
 vwitch ingress set travel --port 51850           # clients need new configs
 vwitch ingress set default --cookies=false       # no cookie replies
+vwitch ingress set guests --admin=false          # no admin UI for its clients
 vwitch ingress rm guests                         # only without clients
 ```
 
@@ -145,6 +150,7 @@ vwitch ingress rm guests                         # only without clients
 | `--padding` | Random padding of data packets. |
 | `--cookies` | Send cookie replies under load. `--cookies=false` turns them off. |
 | `--new-clients-awg3` | New clients get the AWG 3.1 config by default. |
+| `--admin` | Its clients may open the admin UI. Default for `add`: on, unless `--isolated`. `--admin=false` turns it off. |
 
 With `set`, only the flags you pass change. To choose or change a client's
 ingress:

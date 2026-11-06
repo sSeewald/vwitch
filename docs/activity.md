@@ -8,13 +8,17 @@ websites they look up.
 ## Traffic
 
 The graph shows download and upload for the last hour, day, week or month.
+Red bars along the bottom show blocked lookups and connections (legend
+**blocked**); hover a point to see how many, for example *6 blocked*.
 vwitch samples the counters every 10 seconds and keeps the history on the
 server (`/var/lib/vwitch/traffic.json`), so it survives restarts.
 
 ## Clients
 
 Below the graph, every client with its share of the total, a small graph, and
-its download and upload for the chosen range. Click a client to filter the
+its download and upload for the chosen range. Its small graph shows its own
+blocked lookups and outgoing connections as red bars too. Blocked incoming
+connections belong to no client and count only toward the total. Click a client to filter the
 whole page to it; click it again to show all clients.
 
 ## Domains (last 24 h)
@@ -24,6 +28,9 @@ The domains clients looked up during the last 24 hours, grouped by site:
 how often it was looked up, by which clients, and when last.
 
 - **blocked** marks domains on the [blocking](blocking.md) list.
+- **🇽🇽 country blocked** marks a domain whose address the country filter
+  blocked; the tooltip names the country. The lookup worked, but the
+  connection to that country did not.
 - **→ home** marks domains that a [route](routes.md) sends through an egress.
 - Use the search field and the client filter to find something quickly.
 

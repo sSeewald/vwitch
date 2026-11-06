@@ -53,7 +53,8 @@ Click a client to open its page:
 
 - **Top**: where its traffic goes right now and why (for example *First
   working egress in the order*).
-- **Traffic**: its download and upload over time. *Domains and details* opens
+- **Traffic**: its download and upload over time, with its blocked lookups
+  and connections as red bars. *Domains and details* opens
   [Activity](activity.md) filtered to this client.
 - **Active**: inactive clients cannot connect, but keep their config.
 - **Connection**:

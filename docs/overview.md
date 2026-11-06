@@ -27,7 +27,8 @@ From the command line: `vwitch killswitch on|off` and `vwitch fast on|off`.
 ## Traffic
 
 Download and upload of all clients together, for the last hour, day, week or
-month. **Activity per client** opens the [Activity](activity.md) page.
+month. Red bars along the bottom show blocked lookups and connections; see
+[Blocking](blocking.md). **Activity per client** opens the [Activity](activity.md) page.
 
 ## Egresses
 
