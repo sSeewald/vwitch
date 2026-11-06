@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/sseewald/vwitch/internal/certs"
 	"github.com/sseewald/vwitch/internal/config"
@@ -31,6 +32,7 @@ type Page struct {
 	Center bool // centered brand + card, preferences in the footer (login)
 	Nav    []NavItem
 	Error  string
+	Saved  bool // show the "saved" confirmation
 	Data   any
 }
 
@@ -43,9 +45,11 @@ type Renderer struct {
 }
 
 var funcs = template.FuncMap{
-	"t":           i18n.T,
-	"list":        func(v ...string) []string { return v },
-	"inc":         func(i int) int { return i + 1 },
+	"t":    i18n.T,
+	"list": func(v ...string) []string { return v },
+	"inc":  func(i int) int { return i + 1 },
+	// lastDay is the last valid day of an expiry stored as the following midnight
+	"lastDay":     func(t *time.Time) time.Time { return t.Add(-time.Nanosecond) },
 	"version":     version.String,
 	"repoURL":     func() string { return version.RepoURL },
 	"selfSigned":  certs.IsSelfSigned,

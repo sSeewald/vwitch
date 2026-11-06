@@ -231,5 +231,22 @@
   "event.route_removed": "Route %s gelöscht",
   "settings.portal_actions.hint": "Schaltet nichts sofort um. Legt nur fest, welche Schalter jeder Client auf seiner eigenen Seite (http://v.witch) sieht. Direktmodus-Schalter erscheinen nur, wenn die eigene Leitung des Servers erlaubt ist.",
   "settings.language": "Standardsprache",
-  "settings.language.hint": "Für Clients und Browser ohne eigene Wahl. Die Sprache dieser Seite stellst du oben mit DE/EN um."
+  "settings.language.hint": "Für Clients und Browser ohne eigene Wahl. Die Sprache dieser Seite stellst du oben mit DE/EN um.",
+  "settings.awg": "Tarnung (AmneziaWG)",
+  "settings.awg.hint": "Diese Optionen machen das VPN schwerer erkennbar. Die ersten beiden ändern nur den Server und funktionieren mit jedem Client.",
+  "settings.awg.cookies": "Keine Cookie-Antworten",
+  "settings.awg.cookies.hint": "Unter Last sendet der Server nie die erkennbaren Cookie-Pakete von WireGuard. Nachteil: weniger Schutz gegen Handshake-Fluten.",
+  "settings.awg.padding": "Zufälliges Padding",
+  "settings.awg.padding.hint": "Datenpakete bekommen eine zufällige Länge statt eines Vielfachen von 16 Bytes. Clients mit AWG 3.1 polstern auch ihre eigenen Pakete.",
+  "settings.awg.strict": "Nur AWG 3.1 (Header Protection)",
+  "settings.awg.strict.hint": "Verschlüsselt die Paket-Header und hängt zufällige Bytes an. Stärkste Tarnung, aber jeder Client braucht eine App mit AWG 3.1 und eine neue Config.",
+  "settings.awg.strict.on.confirm": "Header Protection einschalten? Alle Clients verlieren die Verbindung, bis sie ihre neue Config importiert haben, und Clients ohne AWG 3.1 kommen gar nicht mehr rein.",
+  "settings.awg.strict.off.confirm": "Header Protection ausschalten? Alle Clients verlieren die Verbindung, bis sie ihre neue Config importiert haben.",
+  "client.awg3": "AmneziaWG 3.1",
+  "client.awg3.hint": "Schreibt die AWG-3.1-Zeilen (zufälliges Padding) in die Config. Nur für Apps mit AWG-3.1-Unterstützung, ältere Apps lehnen die Config ab. Braucht eine neue Config.",
+  "client.awg3.strict": "Header Protection ist an: Dieser Client bekommt immer die AWG-3.1-Config.",
+  "cancel": "Abbrechen",
+  "unsaved.title": "Ungespeicherte Änderungen",
+  "unsaved.text": "Du hast auf dieser Seite etwas geändert und nicht gespeichert. Vor dem Verlassen speichern?",
+  "unsaved.discard": "Verwerfen"
 }

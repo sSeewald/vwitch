@@ -7,6 +7,7 @@
 <title>{{if .Title}}{{t .Lang .Title}} · {{end}}vwitch</title>
 <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <script src="/static/theme.js"></script>
+<script src="/static/forms.js" defer></script>
 <link rel="stylesheet" href="/static/vwitch.css">
 <script src="/static/htmx.min.js" defer></script>
 <script src="/static/htmx-ext-sse.min.js" defer></script>
@@ -43,8 +44,18 @@
   </nav>
   {{end}}
   {{if .Error}}<p class="alert" role="alert">{{.Error}}</p>{{end}}
+  {{if .Saved}}<p class="toast" role="status" data-toast>{{t .Lang "saved"}}</p>{{end}}
   {{template "content" .}}
   <footer class="foot">{{template "credits"}}</footer>
+  {{if .Admin}}<dialog class="modal" data-unsaved aria-labelledby="unsaved-title">
+    <h3 id="unsaved-title">{{t .Lang "unsaved.title"}}</h3>
+    <p>{{t .Lang "unsaved.text"}}</p>
+    <div class="modal-actions">
+      <button type="button" data-unsaved-save>{{t .Lang "save"}}</button>
+      <button type="button" class="secondary" data-unsaved-discard>{{t .Lang "unsaved.discard"}}</button>
+      <button type="button" class="secondary" data-unsaved-cancel>{{t .Lang "cancel"}}</button>
+    </div>
+  </dialog>{{end}}
 </div>
 {{end}}
 </body>

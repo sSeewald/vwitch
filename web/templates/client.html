@@ -17,8 +17,10 @@
       {{if hasPrefix $route "strategy:"}}<option value="{{$route}}" selected>{{t $l (print "strategy." $c.Strategy)}}</option>{{end}}
     </select>
     <p class="hint">{{t $l "client.route.hint"}}</p></div>
+  {{if .Data.Strict}}<p class="hint">{{t $l "client.awg3.strict"}}</p>{{else}}
+  <label class="check"><span>{{t $l "client.awg3"}}<span class="hint">{{t $l "client.awg3.hint"}}</span></span><input class="switch" type="checkbox" name="awg3" value="true" {{if $c.AWG3}}checked{{end}}></label>{{end}}
   <div class="field"><label for="exp">{{t $l "client.expires"}}</label>
-    <input id="exp" type="date" name="expires" value="{{if $c.Expires}}{{$c.Expires.Format "2006-01-02"}}{{end}}">
+    <input id="exp" type="date" name="expires" value="{{if $c.Expires}}{{(lastDay $c.Expires).Format "2006-01-02"}}{{end}}">
     <p class="hint">{{t $l "client.expires.hint"}}</p></div>
   <button>{{t $l "save"}}</button>
 </form>

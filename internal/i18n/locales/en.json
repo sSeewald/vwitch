@@ -231,5 +231,22 @@
   "event.route_removed": "Route %s removed",
   "settings.portal_actions.hint": "Does not switch anything right away. Only sets which switches each client sees on its own page (http://v.witch). Direct mode switches appear only if the server's own connection is allowed.",
   "settings.language": "Default language",
-  "settings.language.hint": "For clients and browsers without their own choice. Switch the language of this page with DE/EN at the top."
+  "settings.language.hint": "For clients and browsers without their own choice. Switch the language of this page with DE/EN at the top.",
+  "settings.awg": "Camouflage (AmneziaWG)",
+  "settings.awg.hint": "These options make the VPN harder to recognize. The first two only change the server and work with every client.",
+  "settings.awg.cookies": "No cookie replies",
+  "settings.awg.cookies.hint": "Under load the server never sends WireGuard's recognizable cookie packets. Downside: less protection against handshake floods.",
+  "settings.awg.padding": "Random padding",
+  "settings.awg.padding.hint": "Data packets get a random length instead of a multiple of 16 bytes. Clients with AWG 3.1 also pad their own packets.",
+  "settings.awg.strict": "AWG 3.1 only (header protection)",
+  "settings.awg.strict.hint": "Encrypts the packet headers and adds random trailers. Strongest camouflage, but every client needs an app with AWG 3.1 and a new config.",
+  "settings.awg.strict.on.confirm": "Switch on header protection? All clients lose the connection until they import their new config, and clients without AWG 3.1 cannot connect at all.",
+  "settings.awg.strict.off.confirm": "Switch off header protection? All clients lose the connection until they import their new config.",
+  "client.awg3": "AmneziaWG 3.1",
+  "client.awg3.hint": "Adds the AWG 3.1 lines (random padding) to the config. Only for apps with AWG 3.1 support, older apps reject the config. Needs a new config.",
+  "client.awg3.strict": "Header protection is on: this client always gets the AWG 3.1 config.",
+  "cancel": "Cancel",
+  "unsaved.title": "Unsaved changes",
+  "unsaved.text": "You changed this page without saving. Save the changes before leaving?",
+  "unsaved.discard": "Discard"
 }

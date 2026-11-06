@@ -59,7 +59,7 @@ func (a *Admin) deleteRoute(w http.ResponseWriter, r *http.Request) {
 // routesResult redirects back after success or shows the page with the error.
 func (a *Admin) routesResult(w http.ResponseWriter, r *http.Request, err error, d routeDraft) {
 	if err == nil {
-		http.Redirect(w, r, "/routes", http.StatusSeeOther)
+		savedRedirect(w, r, "/routes")
 		return
 	}
 	p := a.basePage(r, "nav.routes")

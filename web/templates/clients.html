@@ -5,7 +5,7 @@
     <li class="row">
       <div>
         <h3><a href="/clients/{{.Name}}">{{.Name}}</a></h3>
-        <p class="muted small mono">{{.Address}}{{if .Expires}} · {{t $l "client.expires"}} {{.Expires.Format "02.01.2006"}}{{end}}</p>
+        <p class="muted small mono">{{.Address}}{{if .Expires}} · {{t $l "client.expires"}} {{(lastDay .Expires).Format "02.01.2006"}}{{end}}</p>
       </div>
       <span class="spacer"></span>
       {{if not .Active}}<span class="pill">{{t $l "client.inactive"}}</span>

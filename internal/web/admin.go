@@ -24,6 +24,7 @@ import (
 	"github.com/sseewald/vwitch/internal/config"
 	"github.com/sseewald/vwitch/internal/daemon"
 	"github.com/sseewald/vwitch/internal/i18n"
+	"github.com/sseewald/vwitch/internal/ingress"
 	"github.com/sseewald/vwitch/internal/qr"
 )
 
@@ -120,6 +121,9 @@ func (a *Admin) Handler() http.Handler {
 			return a.d.SetPassword(pw)
 		}
 		return nil
+	}))
+	p("POST /settings/awg-strict", a.form("/settings", "settings", func(r *http.Request) error {
+		return a.d.Set("awg.strict", strconv.FormatBool(r.FormValue("on") == "true"))
 	}))
 	p("POST /settings/tls", a.form("/settings", "settings", a.uploadTLS))
 	p("POST /settings/tls/delete", a.form("/settings", "settings", func(*http.Request) error {
@@ -319,7 +323,8 @@ func (a *Admin) data() pageData {
 func (a *Admin) lang(r *http.Request) string { return i18n.Pick(r, a.d.Config().Web.Language) }
 
 func (a *Admin) basePage(r *http.Request, title string) Page {
-	return Page{Lang: a.lang(r), Title: title, Path: r.URL.Path, Admin: true, Nav: nav}
+	return Page{Lang: a.lang(r), Title: title, Path: r.URL.Path, Admin: true, Nav: nav,
+		Saved: r.Method == http.MethodGet && r.URL.Query().Has(savedParam)}
 }
 
 func (a *Admin) page(name, title string) http.HandlerFunc {
@@ -341,8 +346,16 @@ func (a *Admin) form(back, page string, fn func(*http.Request) error) http.Handl
 			a.r.Page(w, page, p)
 			return
 		}
-		http.Redirect(w, r, back, http.StatusSeeOther)
+		savedRedirect(w, r, back)
 	}
+}
+
+// savedParam marks the page after a successful change; the page shows a
+// confirmation and removes the parameter from the address bar.
+const savedParam = "saved"
+
+func savedRedirect(w http.ResponseWriter, r *http.Request, back string) {
+	http.Redirect(w, r, back+"?"+savedParam, http.StatusSeeOther)
 }
 
 // events streams rendered fragments of the dashboard via SSE.
@@ -555,6 +568,7 @@ type clientPage struct {
 	Egresses    []config.Egress
 	Strategy    config.Strategy // global strategy, shown for "automatic"
 	AllowDirect bool
+	Strict      bool // AWG 3.1 for every client
 }
 
 func (a *Admin) client(w http.ResponseWriter, r *http.Request) {
@@ -573,7 +587,7 @@ func (a *Admin) client(w http.ResponseWriter, r *http.Request) {
 	p := a.basePage(r, "nav.clients")
 	p.Path = "/clients"
 	c := a.d.Config()
-	p.Data = clientPage{cs, c.SortedEgresses(), c.Selection.Strategy, c.Server.AllowDirect}
+	p.Data = clientPage{cs, c.SortedEgresses(), c.Selection.Strategy, c.Server.AllowDirect, c.Server.AWG.Strict()}
 	a.r.Page(w, "client", p)
 }
 
@@ -585,7 +599,8 @@ func (a *Admin) updateClient(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		o := daemon.ClientOptions{Enabled: &enabled, Expires: exp, NoExpiry: exp == nil}
+		awg3 := r.FormValue("awg3") == "true"
+		o := daemon.ClientOptions{Enabled: &enabled, Expires: exp, NoExpiry: exp == nil, AWG3: &awg3}
 		// one "connection" choice: auto, a fixed egress or direct; direct is
 		// the client's direct switch, so the egress choice stays untouched
 		direct := false
@@ -649,28 +664,39 @@ func (a *Admin) saveSettings(r *http.Request) error {
 		actions[i] = string(x)
 	}
 	current := map[string]string{
-		"strategy":         string(c.Selection.Strategy),
-		"fixed":            c.Selection.Fixed,
-		"offline":          string(c.Selection.Offline),
-		"allow_direct":     strconv.FormatBool(c.Server.AllowDirect),
-		"endpoint":         c.Server.Endpoint,
-		"resolver":         c.DNS.Resolver.String(),
-		"hostnames":        strings.Join(c.Web.Hostnames, ", "),
-		"portal_actions":   strings.Join(actions, ", "),
-		"admin_interfaces": strings.Join(c.Server.AdminInterfaces, ", "),
-		"lockdown_ssh":     strconv.FormatBool(c.Server.LockdownSSH),
-		"language":         c.Web.Language,
+		"strategy":            string(c.Selection.Strategy),
+		"fixed":               c.Selection.Fixed,
+		"offline":             string(c.Selection.Offline),
+		"allow_direct":        strconv.FormatBool(c.Server.AllowDirect),
+		"endpoint":            c.Server.Endpoint,
+		"resolver":            c.DNS.Resolver.String(),
+		"hostnames":           strings.Join(c.Web.Hostnames, ", "),
+		"portal_actions":      strings.Join(actions, ", "),
+		"admin_interfaces":    strings.Join(c.Server.AdminInterfaces, ", "),
+		"lockdown_ssh":        strconv.FormatBool(c.Server.LockdownSSH),
+		"language":            c.Web.Language,
+		"awg.disable_cookies": strconv.FormatBool(c.Server.AWG.DisableCookies),
+		"awg.content_padding": c.Server.AWG.ContentPadding,
 	}
 	// applied as one change and validated together; within it, allow_direct
 	// comes before offline and fixed before strategy
 	order := []string{"allow_direct", "fixed", "strategy", "offline", "endpoint", "resolver", "hostnames",
-		"portal_actions", "admin_interfaces", "lockdown_ssh", "language"}
+		"portal_actions", "admin_interfaces", "lockdown_ssh", "language", "awg.disable_cookies", "awg.content_padding"}
 	var changes [][2]string
 	for _, k := range order {
 		v := strings.TrimSpace(r.FormValue(k))
 		switch k {
-		case "allow_direct", "lockdown_ssh":
+		case "allow_direct", "lockdown_ssh", "awg.disable_cookies":
 			v = strconv.FormatBool(v == "true")
+		case "awg.content_padding": // a switch: keep the current range while on
+			switch {
+			case v != "true":
+				v = ""
+			case current[k] != "":
+				v = current[k]
+			default:
+				v = ingress.DefaultContentPadding
+			}
 		case "portal_actions": // one checkbox per action
 			v = strings.Join(r.Form["portal_actions"], ", ")
 		}

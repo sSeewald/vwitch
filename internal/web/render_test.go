@@ -73,3 +73,14 @@ func TestAllPagesRender(t *testing.T) {
 		}
 	}
 }
+
+func TestExpiryRoundTrip(t *testing.T) {
+	exp, err := parseDate("2030-01-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := funcs["lastDay"].(func(*time.Time) time.Time)(exp)
+	if got := last.Format("2006-01-02"); got != "2030-01-31" {
+		t.Fatalf("saving shifts the date: %s", got)
+	}
+}
