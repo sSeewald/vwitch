@@ -61,7 +61,7 @@ client page), all listed in **[docs/](docs/README.md)**.
 - **Local UI names.** `v.witch` and `vwitch.internal` work like a router's local admin name, and the names are configurable.
 - **Web UI.**
   - A client view is reachable only from inside the tunnel.
-  - An admin view at **https://v.witch** for every VPN client, HTTPS only, with username and password. Which interfaces may reach it is configurable (default `lo`, `awg0` and every further ingress that is not isolated; add NetBird `wt0` for access without the VPN). SSH is never opened to VPN clients.
+  - An admin view at **https://v.witch** for every VPN client, HTTPS only, with username and password. By default every VPN client reaches it, except clients of an isolated ingress; add NetBird `wt0` for access without the VPN. SSH is never opened to VPN clients.
   - A security panel lists open ports on the server that you should close.
   - Live updates via SSE, mobile first, light and dark themes, English and German.
 - **Full CLI.** Status, egresses, clients (QR code included), ordering, kill switch and settings, all from the terminal.
@@ -325,7 +325,7 @@ All of these are configurable.
 ## Security
 
 - **Admin UI.**
-  - HTTPS only and reachable only on the configured admin interfaces (by default `lo` and the VPN ingresses that are not isolated).
+  - HTTPS only. By default every VPN client can open it at https://v.witch (through any ingress that is not isolated), and so can the server itself (`lo`). Nothing else reaches it unless you add an interface, e.g. NetBird `wt0`. Clients of an isolated ingress cannot open it. The list is the setting `admin_interfaces`.
   - Without your own certificate, vwitch generates a self-signed one, renews it automatically and logs its SHA-256 fingerprint. Upload your own in the UI or with `vwitch tls set`; it applies without a restart.
   - Sign-in uses a username plus a bcrypt-hashed password, with login rate limiting and cross-origin protection. Changing the sign-in requires the current password.
   - Server-side sessions use random tokens (not JWT). They expire after 7 days without use or 30 days at most, and end on logout or a password change. They survive restarts: the state directory keeps only SHA-256 hashes of the tokens.
