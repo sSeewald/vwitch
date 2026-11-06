@@ -346,5 +346,17 @@
   "act.region_blocked.hint": "Connections to its address in %s were blocked by the country filter.",
   "act.blocked_events": "blocked",
   "ingress.opt.admin": "Admin UI reachable",
-  "ingress.opt.admin.hint": "Its clients can open the admin UI at https://v.witch (still behind the login)."
+  "ingress.opt.admin.hint": "Its clients can open the admin UI at https://v.witch (still behind the login).",
+  "camo.title": "Camouflage",
+  "camo.level": "level %d of 3",
+  "camo.1": "Basic",
+  "camo.2": "Padding",
+  "camo.3": "Header protection",
+  "camo.1.desc": "AmneziaWG basics: junk packets before the handshake, padded handshakes and header values of its own. Common WireGuard filters do not recognize it.",
+  "camo.2.desc": "The basics plus a random length for every data packet (AWG 3.1), so packet sizes give nothing away.",
+  "camo.3.desc": "Padding plus encrypted headers and random trailers (strict ingress): no fixed byte pattern is left. The strongest level.",
+  "camo.1.more": "More: switch on AmneziaWG 3.1 below (needs padding on its ingress and a new config).",
+  "camo.2.more": "Most: move it to a strict ingress, if its app supports header protection.",
+  "camo.outdated": "The device still has an older config; this level applies once the new one is imported.",
+  "camo.offline": "From its config; the device is not connected right now."
 }

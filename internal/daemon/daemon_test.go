@@ -630,3 +630,18 @@ func TestNewClientsAWG3Default(t *testing.T) {
 		t.Fatal("default off ignored")
 	}
 }
+
+func TestCamouflage(t *testing.T) {
+	a := config.AWGParams{}
+	if camouflage(a, true) != CamouflageBasic {
+		t.Fatal("AWG 3.1 without padding on the ingress is basic")
+	}
+	a.ContentPadding = "8-96"
+	if camouflage(a, false) != CamouflageBasic || camouflage(a, true) != CamouflagePadding {
+		t.Fatal("padding needs the client's AWG 3.1 config")
+	}
+	a.HeaderProtectionKey = "k"
+	if camouflage(a, false) != CamouflageHeaders {
+		t.Fatal("strict ingress")
+	}
+}

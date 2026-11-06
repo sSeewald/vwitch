@@ -346,5 +346,17 @@
   "act.region_blocked.hint": "Verbindungen zu seiner Adresse in %s hat die Ländersperre blockiert.",
   "act.blocked_events": "gesperrt",
   "ingress.opt.admin": "Admin-UI erreichbar",
-  "ingress.opt.admin.hint": "Seine Clients können die Admin-UI unter https://v.witch öffnen (weiterhin mit Login)."
+  "ingress.opt.admin.hint": "Seine Clients können die Admin-UI unter https://v.witch öffnen (weiterhin mit Login).",
+  "camo.title": "Tarnung",
+  "camo.level": "Stufe %d von 3",
+  "camo.1": "Basis",
+  "camo.2": "Padding",
+  "camo.3": "Header Protection",
+  "camo.1.desc": "AmneziaWG-Grundschutz: Junk-Pakete vor dem Handshake, aufgefüllte Handshakes und eigene Header-Werte. Übliche WireGuard-Filter erkennen das nicht.",
+  "camo.2.desc": "Grundschutz plus zufällige Länge für jedes Datenpaket (AWG 3.1), damit Paketgrößen nichts verraten.",
+  "camo.3.desc": "Padding plus verschlüsselte Header und zufällige Trailer (strikter Eingang): Es bleibt kein festes Byte-Muster. Die stärkste Stufe.",
+  "camo.1.more": "Mehr: unten AmneziaWG 3.1 einschalten (braucht Padding am Eingang und eine neue Config).",
+  "camo.2.more": "Am meisten: auf einen strikten Eingang umziehen, wenn die App Header Protection kann.",
+  "camo.outdated": "Das Gerät hat noch eine ältere Config; diese Stufe gilt erst nach dem Import der neuen.",
+  "camo.offline": "Laut Config; das Gerät ist gerade nicht verbunden."
 }

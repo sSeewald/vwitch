@@ -77,6 +77,10 @@ type ClientStatus struct {
 	AWG3         bool       `json:"awg3,omitempty"`     // config carries the AWG 3.1 lines
 	Ingress      string     `json:"ingress"`
 	Strict       bool       `json:"strict,omitempty"` // its ingress uses header protection
+	// Camouflage is what its config makes the device do against traffic
+	// analysis: 1 AmneziaWG basics, 2 plus random padding, 3 plus header
+	// protection.
+	Camouflage int `json:"camouflage"`
 	state.ClientSwitch
 }
 
@@ -115,6 +119,7 @@ func (d *Daemon) buildStatus(c *config.Config, sw state.Switches, now time.Time)
 			Outdated: cl.Issued != "" && cl.Issued != clients.Fingerprint(c, cl), ClientSwitch: sw.Clients[cl.Name],
 			Ingress: c.ClientIngress(cl).Name, Strict: c.ClientIngress(cl).AWG.Strict()}
 		cs.AWG3 = cl.AWG3 || cs.Strict
+		cs.Camouflage = camouflage(c.ClientIngress(cl).AWG, cl.AWG3)
 		if p, ok := peers[cl.PublicKey]; ok {
 			if a := health.HandshakeAge(now, p.LastHandshake); a >= 0 {
 				cs.HandshakeAge = a.Seconds()
@@ -188,4 +193,21 @@ func (d *Daemon) ClientByAddr(addr string) (ClientStatus, bool) {
 		}
 	}
 	return ClientStatus{}, false
+}
+
+// camouflage levels, see ClientStatus.Camouflage
+const (
+	CamouflageBasic   = 1
+	CamouflagePadding = 2
+	CamouflageHeaders = 3
+)
+
+func camouflage(a config.AWGParams, awg3 bool) int {
+	switch {
+	case a.Strict():
+		return CamouflageHeaders
+	case awg3 && a.ContentPadding != "":
+		return CamouflagePadding
+	}
+	return CamouflageBasic
 }
