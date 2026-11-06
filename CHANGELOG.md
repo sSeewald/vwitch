@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/sSeewald/vwitch/compare/v1.2.1...v1.2.2) (2026-11-06)
+
+
+### Bug Fixes
+
+* show each client's camouflage level ([#12](https://github.com/sSeewald/vwitch/issues/12)) ([6c57ff8](https://github.com/sSeewald/vwitch/commit/6c57ff890e31bacdd32f9413070ec0b098fd653a))
+
 ## [1.2.1](https://github.com/sSeewald/vwitch/compare/v1.2.0...v1.2.1) (2026-11-06)
 
 
