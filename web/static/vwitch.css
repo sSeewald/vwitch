@@ -452,3 +452,16 @@ button.menu-item:disabled { opacity: 1; color: var(--ok); font-weight: 700; }
 /* blocked lookups and connections in the traffic charts */
 [data-chart] .blk { fill: var(--bad); opacity: .85; }
 .legend .key.blk { background: var(--bad); margin-left: 10px; height: 8px; width: 4px; }
+/* camouflage level: a shield with 1-3 bars */
+.camo { color: var(--accent); flex: none; vertical-align: -3px; }
+.camo .shield { fill: color-mix(in srgb, currentColor 12%, transparent); stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; }
+.camo rect { fill: currentColor; opacity: .22; }
+.camo rect.on { opacity: 1; }
+.camo.idle { color: var(--muted); }
+.camo.idle rect { opacity: .15; }
+.camo.idle rect.on { fill: var(--text); opacity: .75; }
+h3.with-camo { display: inline-flex; align-items: center; gap: 8px; }
+.camo-info { display: flex; gap: 14px; align-items: flex-start; padding-top: 12px; border-top: 1px solid var(--line); }
+.camo-big .camo { width: 34px; height: 38px; }
+.camo-info .hint { margin: 4px 0 0; }
+.hint.warn { color: var(--warn); }

@@ -6,6 +6,14 @@
     <span class="pill">{{exitLabel $l $c.Exit $c.Egress}}</span>
   </div>
   {{with reasonText $l $c.Reason}}<p class="muted small">{{.}}</p>{{end}}
+  <div class="camo-info">
+    <span class="camo-big">{{template "camo" (withLang $l $c)}}</span>
+    <div>
+      <b>{{t $l "camo.title"}}: {{t $l (print "camo." $c.Camouflage)}}</b> <span class="muted small nowrap">{{t $l "camo.level" $c.Camouflage}}</span>
+      <p class="hint">{{t $l (print "camo." $c.Camouflage ".desc")}}{{if lt $c.Camouflage 3}} {{t $l (print "camo." $c.Camouflage ".more")}}{{end}}</p>
+      {{if $c.Outdated}}<p class="hint warn">{{t $l "camo.outdated"}}</p>{{else if not $c.Online}}<p class="hint">{{t $l "camo.offline"}}</p>{{end}}
+    </div>
+  </div>
 </div>
 
 <section class="card stack chart-card">{{template "traffic-chart" (list $l "24h" $c.Name "")}}<a class="small" href="/activity?range=24h&client={{$c.Name}}">{{t $l "act.client_more"}}</a></section>

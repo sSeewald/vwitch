@@ -18,7 +18,7 @@ import (
 // TestAllPagesRender executes every template with realistic data in all
 // languages, catching template errors and missing translations at build time.
 // untranslated finds i18n keys (e.g. "egress.add") that leaked into a page.
-var untranslated = regexp.MustCompile(`\b(nav|egress|ingress|settings|dash|client|route|block|act)\.[a-z_]+`)
+var untranslated = regexp.MustCompile(`\b(nav|egress|ingress|settings|dash|client|route|block|act|camo)\.[a-z_0-9]+`)
 
 func TestAllPagesRender(t *testing.T) {
 	r, err := NewRenderer()
@@ -33,7 +33,7 @@ func TestAllPagesRender(t *testing.T) {
 	st := daemon.Status{
 		Egresses: []daemon.EgressStatus{{Name: "home", Enabled: true, Healthy: true, HandshakeAge: 12, LatencyMs: 23, RxRate: 1500}},
 		Clients: []daemon.ClientStatus{{Name: "phone", Address: "10.8.0.2", Active: true, Online: true, Exit: "egress", Egress: "home", Expires: &exp,
-			Strategy: "fixed", Fixed: "home"}},
+			Strategy: "fixed", Fixed: "home", Camouflage: 2}},
 		Events: []state.Event{{Time: time.Now(), Key: "switched", Args: []string{"phone", "@exit.block", "home", "@reason.failover"}}},
 		Routes: []daemon.RouteStatus{{Name: "google", Egress: "home", Domains: []string{"google.de", "youtube.com"}, Active: true, Learned: 3}},
 	}
@@ -64,7 +64,7 @@ func TestAllPagesRender(t *testing.T) {
 		w := httptest.NewRecorder()
 		r.Page(w, "client", Page{Lang: lang, Admin: true, Data: clientPage{Client: st.Clients[0],
 			Egresses: cfg.Egresses, Strategy: "failover", AllowDirect: true, Ingresses: cfg.Ingresses}})
-		if b := w.Body.String(); w.Code != 200 || !strings.Contains(b, "phone") || !strings.Contains(b, `name="ingress"`) || !strings.Contains(b, "pill pin") || untranslated.MatchString(b) {
+		if b := w.Body.String(); w.Code != 200 || !strings.Contains(b, "phone") || !strings.Contains(b, `name="ingress"`) || !strings.Contains(b, "pill pin") || !strings.Contains(b, `class="camo"`) || untranslated.MatchString(b) {
 			t.Fatalf("client page: %s", w.Body.String())
 		}
 		w = httptest.NewRecorder()

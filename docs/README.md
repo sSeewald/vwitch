@@ -21,7 +21,7 @@ screenshots and the matching commands.
 | 📊 | **[Overview](overview.md)** | See at a glance whether everything works. Kill switch, direct mode, traffic, events, security check. |
 | 🚪 | **[Ingresses](ingresses.md)** | Entry points for your devices: ports, camouflage, isolation for guests. |
 | 🌍 | **[Egresses](egresses.md)** | Exits: add WireGuard tunnels, set their order, see their health. |
-| 📱 | **[Clients](clients.md)** | Add devices, show their config as QR code, pin them to an exit, block or remove them. |
+| 📱 | **[Clients](clients.md)** | Add devices, show their config as QR code, see their camouflage level, pin them to an exit, block or remove them. |
 | 🔀 | **[Routes](routes.md)** | Send certain websites always through one exit. |
 | 📈 | **[Activity](activity.md)** | Traffic per device and the websites they look up. |
 | 🚫 | **[Blocking](blocking.md)** | Block websites and countries, see what was blocked. |
