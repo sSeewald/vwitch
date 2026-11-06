@@ -1,0 +1,61 @@
+{{define "content"}}{{$l := .Lang}}
+<p class="muted small">{{t $l "ingress.hint"}}</p>
+<ul class="egress-list">
+{{range .Data.Rows}}{{$in := .}}{{$a := .AWG}}
+  <li class="egress">
+    <div class="egress-main">
+      <div class="egress-head">
+        <h3>{{.Name}}</h3>
+        {{if $a.Strict}}<span class="pill ok">{{t $l "ingress.strict"}}</span>{{else}}<span class="pill">{{t $l "ingress.compatible"}}</span>{{end}}
+        {{if .Isolated}}<span class="pill warn">{{t $l "ingress.isolated"}}</span>{{end}}
+      </div>
+      <p class="meta mono">UDP {{.ListenPort}} · {{.Interface}}</p>
+      <p class="meta">
+        <span>{{t $l "egress.clients"}} <b>{{.Status.Clients}}</b></span>
+        <span>{{t $l "ingress.online"}} <b>{{.Status.Online}}</b></span>
+        <span>{{t $l "ingress.traffic"}} <b>↓ {{bytes .Traffic.Down}} · ↑ {{bytes .Traffic.Up}}</b></span>
+        <span>{{t $l "ingress.admin"}} <b>{{if .Status.Admin}}{{t $l "yes"}}{{else}}{{t $l "no"}}{{end}}</b></span>
+      </p>
+      <details class="egress-more">
+        <summary>{{t $l "egress.options"}}</summary>
+        <form class="stack" method="post" action="/ingresses/{{.Name}}">
+          <div class="field"><label for="port-{{.Name}}">{{t $l "settings.listen_port"}}</label>
+            <input id="port-{{.Name}}" name="listen_port" type="number" min="1" max="65535" value="{{.ListenPort}}" required inputmode="numeric">
+            <p class="hint">{{t $l "settings.listen_port.hint"}}</p></div>
+          {{template "ingress-switch" (list $l "isolated" (print .Isolated))}}
+          {{template "ingress-switch" (list $l "new_clients_awg3" (print $a.NewClientsAWG3))}}
+          {{template "ingress-switch" (list $l "content_padding" (print (ne $a.ContentPadding "")))}}
+          {{template "ingress-switch" (list $l "disable_cookies" (print $a.DisableCookies))}}
+          <button class="small">{{t $l "save"}}</button>
+        </form>
+        <form class="control" method="post" action="/ingresses/{{.Name}}"
+          hx-confirm="{{if $a.Strict}}{{t $l "settings.awg.strict.off.confirm"}}{{else}}{{t $l "settings.awg.strict.on.confirm"}}{{end}}">
+          <input type="hidden" name="strict_shown" value="1"><input type="hidden" name="strict" value="{{not $a.Strict}}">
+          <div><b>{{t $l "settings.awg.strict"}}</b><p class="hint">{{t $l "settings.awg.strict.hint"}}</p></div>
+          <button class="switch" role="switch" aria-checked="{{$a.Strict}}" aria-label="{{t $l "settings.awg.strict"}}"></button>
+        </form>
+        {{if gt (len $.Data.Rows) 1}}<form method="post" action="/ingresses/{{.Name}}/delete" hx-confirm="{{t $l "ingress.delete.confirm" .Name}}">
+          <button class="danger small" {{if .Status.Clients}}disabled title="{{t $l "ingress.delete.used"}}"{{end}}>{{t $l "delete"}}</button>
+        </form>{{end}}
+      </details>
+    </div>
+  </li>
+{{end}}
+</ul>
+
+<h2>{{t $l "ingress.add"}}</h2>
+<form class="card stack" method="post" action="/ingresses">
+  <div class="field"><label for="iname">{{t $l "name"}}</label><input id="iname" name="name" required pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,31}" placeholder="{{t $l "ingress.name.placeholder"}}"></div>
+  <div class="field"><label for="iport">{{t $l "settings.listen_port"}}</label>
+    <input id="iport" name="listen_port" type="number" min="1" max="65535" value="{{.Data.Next}}" required inputmode="numeric">
+    <p class="hint">{{t $l "ingress.port.hint"}}</p></div>
+  {{template "ingress-switch" (list $l "strict" "false")}}
+  {{template "ingress-switch" (list $l "isolated" "false")}}
+  <button>{{t $l "ingress.add"}}</button>
+</form>
+{{end}}
+
+{{define "ingress-switch"}}{{$l := index . 0}}{{$k := index . 1}}
+<label class="check"><span>{{t $l (print "ingress.opt." $k)}}<span class="hint">{{t $l (print "ingress.opt." $k ".hint")}}</span></span>
+  <input type="hidden" name="{{$k}}_shown" value="1"><input class="switch" type="checkbox" name="{{$k}}" value="true" {{if eq (index . 2) "true"}}checked{{end}}></label>
+{{end}}

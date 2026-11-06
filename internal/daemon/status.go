@@ -17,10 +17,23 @@ type Status struct {
 	Time      time.Time        `json:"time"`
 	Selection config.Selection `json:"selection"`
 	Switches  state.Switches   `json:"switches"`
+	Ingresses []IngressStatus  `json:"ingresses"`
 	Egresses  []EgressStatus   `json:"egresses"`
 	Clients   []ClientStatus   `json:"clients"`
 	Routes    []RouteStatus    `json:"routes,omitempty"`
 	Events    []state.Event    `json:"events"`
+}
+
+// IngressStatus describes one ingress.
+type IngressStatus struct {
+	Name     string `json:"name"`
+	Iface    string `json:"iface"`
+	Port     uint16 `json:"port"`
+	Strict   bool   `json:"strict"`   // header protection: AWG 3.1 clients only
+	Isolated bool   `json:"isolated"` // no traffic between its clients and others
+	Admin    bool   `json:"admin"`    // the admin UI is reachable through it
+	Clients  int    `json:"clients"`
+	Online   int    `json:"online"`
 }
 
 // EgressStatus describes one egress.
@@ -62,6 +75,8 @@ type ClientStatus struct {
 	Fixed        string     `json:"fixed,omitempty"`
 	Outdated     bool       `json:"outdated,omitempty"` // needs a new config (server settings changed)
 	AWG3         bool       `json:"awg3,omitempty"`     // config carries the AWG 3.1 lines
+	Ingress      string     `json:"ingress"`
+	Strict       bool       `json:"strict,omitempty"` // its ingress uses header protection
 	state.ClientSwitch
 }
 
@@ -98,7 +113,8 @@ func (d *Daemon) buildStatus(c *config.Config, sw state.Switches, now time.Time)
 		cs := ClientStatus{Name: cl.Name, Address: cl.Address.String(), Enabled: cl.Enabled, Active: cl.Active(now),
 			Expires: cl.Expires, HandshakeAge: -1, Strategy: string(cl.Strategy), Fixed: cl.Fixed,
 			Outdated: cl.Issued != "" && cl.Issued != clients.Fingerprint(c, cl), ClientSwitch: sw.Clients[cl.Name],
-			AWG3: cl.AWG3 || c.Server.AWG.Strict()}
+			Ingress: c.ClientIngress(cl).Name, Strict: c.ClientIngress(cl).AWG.Strict()}
+		cs.AWG3 = cl.AWG3 || cs.Strict
 		if p, ok := peers[cl.PublicKey]; ok {
 			if a := health.HandshakeAge(now, p.LastHandshake); a >= 0 {
 				cs.HandshakeAge = a.Seconds()
@@ -110,6 +126,19 @@ func (d *Daemon) buildStatus(c *config.Config, sw state.Switches, now time.Time)
 			cs.Exit, cs.Egress, cs.Reason = string(t.Kind), t.Egress, string(t.Reason)
 		}
 		st.Clients = append(st.Clients, cs)
+	}
+	for _, in := range c.Ingresses {
+		is := IngressStatus{Name: in.Name, Iface: in.Interface, Port: in.ListenPort, Strict: in.AWG.Strict(),
+			Isolated: in.Isolated, Admin: slices.Contains(c.Server.AdminInterfaces, in.Interface)}
+		for _, cs := range st.Clients {
+			if cs.Ingress == in.Name {
+				is.Clients++
+				if cs.Online {
+					is.Online++
+				}
+			}
+		}
+		st.Ingresses = append(st.Ingresses, is)
 	}
 	return st
 }

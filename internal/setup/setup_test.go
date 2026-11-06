@@ -14,7 +14,7 @@ func TestNewConfig(t *testing.T) {
 	if !auth.CheckPassword(c.Web.Admin.PasswordHash, pw) {
 		t.Fatal("password hash mismatch")
 	}
-	if c.Server.PrivateKey == "" || c.Server.AWG.H1 == "" || c.Selection.Offline != "ask" {
+	if c.Server.PrivateKey == "" || c.Ingresses[0].AWG.H1 == "" || c.Selection.Offline != "ask" {
 		t.Fatalf("%+v", c.Server)
 	}
 	if len(Password()) != 23 {

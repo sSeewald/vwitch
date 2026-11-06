@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"sync"
 
 	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
 	"github.com/amnezia-vpn/amneziawg-go/v3/device"
 	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 )
 
 // Userspace runs amneziawg-go inside the vwitch process.
@@ -103,10 +105,49 @@ func (u *Userspace) SyncPeers(peers []Peer) error {
 	if err != nil {
 		return err
 	}
-	if uapi == "" {
-		return nil
+	if uapi != "" {
+		if err := u.dev.IpcSet(uapi); err != nil {
+			return err
+		}
 	}
-	return u.dev.IpcSet(uapi)
+	return u.peerRoutes(peers)
+}
+
+// peerRoutes routes each peer address to this interface. Ingresses share the
+// client network, so the host routes decide which interface reaches a client.
+func (u *Userspace) peerRoutes(peers []Peer) error {
+	link, err := netlink.LinkByName(u.spec.Name)
+	if err != nil {
+		return err
+	}
+	want := map[netip.Addr]bool{}
+	for _, p := range peers {
+		want[p.Addr] = true
+	}
+	routes, err := netlink.RouteList(link, netlink.FAMILY_V4)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, r := range routes {
+		if r.Dst == nil || r.Table != unix.RT_TABLE_MAIN {
+			continue
+		}
+		if ones, _ := r.Dst.Mask.Size(); ones != 32 {
+			continue
+		}
+		a, _ := netip.AddrFromSlice(r.Dst.IP.To4())
+		if want[a] {
+			delete(want, a)
+			continue
+		}
+		errs = append(errs, netlink.RouteDel(&r))
+	}
+	for a := range want {
+		errs = append(errs, netlink.RouteReplace(&netlink.Route{LinkIndex: link.Attrs().Index, Scope: netlink.SCOPE_LINK,
+			Dst: &net.IPNet{IP: net.IP(a.AsSlice()), Mask: net.CIDRMask(32, 32)}}))
+	}
+	return errors.Join(errs...)
 }
 
 // Stats returns per-peer counters.

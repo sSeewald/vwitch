@@ -39,18 +39,14 @@ func (c *Config) Validate() error {
 	if s.Address.Bits() > 30 {
 		add("server.address prefix too small")
 	}
-	if s.ListenPort == 0 {
-		add("server.listen_port must be set")
-	}
+	c.validateIngresses(add)
 	if s.MTU < 1280 || s.MTU > 1500 {
 		add("server.mtu must be between 1280 and 1500")
 	}
 	if s.PrivateKey == "" {
 		add("server.private_key missing (run 'vwitch setup')")
 	}
-	if err := s.AWG.validate(); err != nil {
-		add("server.awg: %w", err)
-	}
+	c.Security.validate(add)
 	if !c.DNS.Resolver.Is4() {
 		add("dns.resolver must be a public IPv4 address")
 	} else if c.ClientNet().Contains(c.DNS.Resolver) || c.DNS.Resolver.IsPrivate() {
@@ -162,6 +158,9 @@ func (c *Config) Validate() error {
 		addrs[cl.Address.String()] = true
 		if cl.PublicKey == "" {
 			add("client %q: public key missing", cl.Name)
+		}
+		if _, ok := c.Ingress(cl.Ingress); !ok {
+			add("client %q: unknown ingress %q", cl.Name, cl.Ingress)
 		}
 		if len(cl.I) > 5 {
 			add("client %q: at most 5 I-packets", cl.Name)
@@ -305,4 +304,33 @@ func SplitEndpoint(ep string) (host string, port uint16, err error) {
 		return "", 0, fmt.Errorf("invalid endpoint port in %q", ep)
 	}
 	return h, uint16(n), nil
+}
+
+var ingressIfaceRE = regexp.MustCompile(`^` + IngressIfacePrefix + `[0-9]{1,3}$`)
+
+func (c *Config) validateIngresses(add func(string, ...any)) {
+	if len(c.Ingresses) == 0 {
+		add("ingresses: at least one is needed")
+	}
+	names, ifaces, ports := map[string]bool{}, map[string]bool{}, map[uint16]bool{}
+	for _, in := range c.Ingresses {
+		if err := ValidateName(in.Name); err != nil {
+			add("ingress: %w", err)
+		}
+		if names[in.Name] {
+			add("ingress %q defined twice", in.Name)
+		}
+		names[in.Name] = true
+		if !ingressIfaceRE.MatchString(in.Interface) || ifaces[in.Interface] {
+			add("ingress %q: interface must be a unique %sN", in.Name, IngressIfacePrefix)
+		}
+		ifaces[in.Interface] = true
+		if in.ListenPort == 0 || ports[in.ListenPort] {
+			add("ingress %q: listen_port must be set and unique", in.Name)
+		}
+		ports[in.ListenPort] = true
+		if err := in.AWG.validate(); err != nil {
+			add("ingress %q awg: %w", in.Name, err)
+		}
+	}
 }

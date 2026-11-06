@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/sseewald/vwitch/internal/blocking"
 	"github.com/sseewald/vwitch/internal/config"
 	"github.com/sseewald/vwitch/internal/daemon"
 )
@@ -24,6 +25,10 @@ type (
 		Name   string               `json:"name"`
 		Config string               `json:"config"`
 		Opts   daemon.EgressOptions `json:"opts"`
+	}
+	AddIngressRequest struct {
+		Name string                `json:"name"`
+		Opts daemon.IngressOptions `json:"opts"`
 	}
 	AddClientRequest struct {
 		Name string               `json:"name"`
@@ -74,6 +79,21 @@ func Handler(d *daemon.Daemon) http.Handler {
 			reply(w, nil, d.OrderEgresses(req.Names))
 		}
 	})
+	m.HandleFunc("POST /v1/ingresses", func(w http.ResponseWriter, r *http.Request) {
+		var req AddIngressRequest
+		if decode(w, r, &req) {
+			reply(w, nil, d.AddIngress(req.Name, req.Opts))
+		}
+	})
+	m.HandleFunc("PATCH /v1/ingresses/{name}", func(w http.ResponseWriter, r *http.Request) {
+		var o daemon.IngressOptions
+		if decode(w, r, &o) {
+			reply(w, nil, d.SetIngress(r.PathValue("name"), o))
+		}
+	})
+	m.HandleFunc("DELETE /v1/ingresses/{name}", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, nil, d.RemoveIngress(r.PathValue("name")))
+	})
 	m.HandleFunc("POST /v1/clients", func(w http.ResponseWriter, r *http.Request) {
 		var req AddClientRequest
 		if decode(w, r, &req) {
@@ -114,6 +134,21 @@ func Handler(d *daemon.Daemon) http.Handler {
 	})
 	m.HandleFunc("DELETE /v1/routes/{name}", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, d.RemoveRoute(r.PathValue("name")))
+	})
+	m.HandleFunc("GET /v1/blocking", func(w http.ResponseWriter, _ *http.Request) {
+		c := d.Config()
+		reply(w, BlockingResponse{Domains: c.Security.BlockedDomains, Regions: c.Security.Regions,
+			Geo: d.Geo(), Log: d.BlockLog(100, "")}, nil)
+	})
+	m.HandleFunc("POST /v1/blocking/domains", func(w http.ResponseWriter, r *http.Request) {
+		var req BlockDomainsRequest
+		if decode(w, r, &req) {
+			if req.Remove {
+				reply(w, nil, d.UnblockDomain(req.Domains...))
+			} else {
+				reply(w, nil, d.BlockDomain(req.Domains...))
+			}
+		}
 	})
 	m.HandleFunc("POST /v1/settings", func(w http.ResponseWriter, r *http.Request) {
 		var req SetRequest
@@ -231,4 +266,18 @@ func (c *Client) Do(method, path string, in, out any) error {
 		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// BlockingResponse lists what vwitch blocks and the latest hits.
+type BlockingResponse struct {
+	Domains []string         `json:"domains"`
+	Regions config.Regions   `json:"regions"`
+	Geo     daemon.GeoStatus `json:"geo"`
+	Log     []blocking.Event `json:"log"`
+}
+
+// BlockDomainsRequest adds (or with Remove, removes) blocked domains.
+type BlockDomainsRequest struct {
+	Domains []string `json:"domains"`
+	Remove  bool     `json:"remove,omitempty"`
 }

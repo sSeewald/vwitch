@@ -49,7 +49,7 @@ func ageString(sec float64) string {
 func statusCmd(g *globals) *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "Show egresses, clients and switches",
+		Short: "Show egresses, clients and switches (ingresses: vwitch ingress list)",
 		Args:  cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
 			var st daemon.Status
@@ -79,7 +79,7 @@ func statusCmd(g *globals) *cobra.Command {
 			}
 			fmt.Println()
 			w = tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "CLIENT\tADDRESS\tONLINE\tEGRESS\tREASON")
+			fmt.Fprintln(w, "CLIENT\tADDRESS\tINGRESS\tONLINE\tEGRESS\tREASON")
 			for _, c := range st.Clients {
 				exit := c.Exit
 				if exit == "egress" {
@@ -92,7 +92,7 @@ func statusCmd(g *globals) *cobra.Command {
 				if c.Reason != "" {
 					reason = i18n.T("en", "reason."+c.Reason)
 				}
-				fmt.Fprintf(w, "%s\t%s\t%v\t%s\t%s\n", c.Name, c.Address, c.Online, exit, reason)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%v\t%s\t%s\n", c.Name, c.Address, c.Ingress, c.Online, exit, reason)
 			}
 			return w.Flush()
 		},
@@ -190,7 +190,7 @@ func egressCmd(g *globals) *cobra.Command {
 
 func clientCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "client", Short: "Manage AmneziaWG clients"}
-	var expires, strategy, fixed string
+	var expires, strategy, fixed, ingress string
 	var showQR, awg3 bool
 	clientOpts := func(c *cobra.Command) (daemon.ClientOptions, error) {
 		o := daemon.ClientOptions{}
@@ -216,6 +216,9 @@ func clientCmd(g *globals) *cobra.Command {
 		if c.Flags().Changed("awg3") {
 			o.AWG3 = &awg3
 		}
+		if c.Flags().Changed("ingress") {
+			o.Ingress = &ingress
+		}
 		return o, nil
 	}
 	add := &cobra.Command{
@@ -236,7 +239,7 @@ func clientCmd(g *globals) *cobra.Command {
 	}
 	set := &cobra.Command{
 		Use:   "set <name>",
-		Short: "Change expiry, strategy or AWG 3.1",
+		Short: "Change expiry, strategy, ingress or AWG 3.1",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			o, err := clientOpts(c)
@@ -250,7 +253,8 @@ func clientCmd(g *globals) *cobra.Command {
 		c.Flags().StringVar(&expires, "expires", "", "last valid day YYYY-MM-DD, or never")
 		c.Flags().StringVar(&strategy, "strategy", "", "override: failover, weighted, fixed (empty: global)")
 		c.Flags().StringVar(&fixed, "fixed", "", "egress for strategy fixed")
-		c.Flags().BoolVar(&awg3, "awg3", false, "add the AmneziaWG 3.1 lines to the config (the client app must support AWG 3.1)")
+		c.Flags().BoolVar(&awg3, "awg3", false, "add the AmneziaWG 3.1 lines to the config (the client app must support AWG 3.1); new clients follow the default of their ingress, --awg3=false turns it off")
+		c.Flags().StringVar(&ingress, "ingress", "", "ingress the client connects to (default: the first; a change needs a new config)")
 	}
 	add.Flags().BoolVar(&showQR, "qr", false, "also print a QR code")
 

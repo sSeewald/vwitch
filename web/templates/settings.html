@@ -22,6 +22,7 @@
       {{end}}
       <p class="hint">{{t $l "settings.portal_actions.hint"}}</p>
     </fieldset>
+    <label class="check"><span>{{t $l "settings.activity"}}<span class="hint">{{t $l "settings.activity.hint"}}</span></span><input class="switch" type="checkbox" name="activity" value="true" {{if not $c.Security.NoActivity}}checked{{end}}></label>
     <div class="field"><label for="s11">{{t $l "settings.language"}}</label>
       <select id="s11" name="language">{{range $.Langs}}<option value="{{.}}" {{if eq . $c.Web.Language}}selected{{end}}>{{t $l (print "lang." .)}}</option>{{end}}</select>
       <p class="hint">{{t $l "settings.language.hint"}}</p></div>
@@ -35,21 +36,7 @@
     <label class="check"><span>{{t $l "settings.lockdown_ssh"}}</span><input class="switch" type="checkbox" name="lockdown_ssh" value="true" {{if $c.Server.LockdownSSH}}checked{{end}}></label>
   </section>
 
-  <section class="card stack">
-    <h3>{{t $l "settings.awg"}}</h3>
-    <p class="hint">{{t $l "settings.awg.hint"}}</p>
-    <label class="check"><span>{{t $l "settings.awg.cookies"}}<span class="hint">{{t $l "settings.awg.cookies.hint"}}</span></span><input class="switch" type="checkbox" name="awg.disable_cookies" value="true" {{if $c.Server.AWG.DisableCookies}}checked{{end}}></label>
-    <label class="check"><span>{{t $l "settings.awg.padding"}}<span class="hint">{{t $l "settings.awg.padding.hint"}}</span></span><input class="switch" type="checkbox" name="awg.content_padding" value="true" {{if $c.Server.AWG.ContentPadding}}checked{{end}}></label>
-  </section>
-
   <div class="sticky-save"><button class="block">{{t $l "save"}}</button></div>
-</form>
-
-<form class="card control{{if $c.Server.AWG.Strict}} danger-on{{end}}" method="post" action="/settings/awg-strict" style="margin-top:12px"
-  hx-confirm="{{if $c.Server.AWG.Strict}}{{t $l "settings.awg.strict.off.confirm"}}{{else}}{{t $l "settings.awg.strict.on.confirm"}}{{end}}">
-  <input type="hidden" name="on" value="{{not $c.Server.AWG.Strict}}">
-  <div><b>{{t $l "settings.awg.strict"}}</b><p class="hint">{{t $l "settings.awg.strict.hint"}}</p></div>
-  <button class="switch" role="switch" aria-checked="{{$c.Server.AWG.Strict}}" aria-label="{{t $l "settings.awg.strict"}}"></button>
 </form>
 
 <h2>{{t $l "settings.security"}}</h2>

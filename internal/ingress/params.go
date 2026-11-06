@@ -27,6 +27,7 @@ func GenerateParams(r *mrand.Rand) config.AWGParams {
 		Jmin:           between(40, 700),
 		DisableCookies: true,
 		ContentPadding: DefaultContentPadding,
+		NewClientsAWG3: true,
 	}
 	p.Jmax = p.Jmin + between(100, 300)
 	setPaddings(&p, r)

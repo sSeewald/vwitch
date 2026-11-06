@@ -65,7 +65,7 @@ func setupCmd(g *globals) *cobra.Command {
 				return err
 			}
 			fmt.Printf("Created %s\n", g.config)
-			fmt.Printf("Endpoint: %s:%d · client network %s\n", c.Server.Endpoint, c.Server.ListenPort, c.ClientNet())
+			fmt.Printf("Endpoint: %s:%d · client network %s\n", c.Server.Endpoint, c.Ingresses[0].ListenPort, c.ClientNet())
 			switch {
 			case pw == "" || passwordStdin:
 				fmt.Printf("Admin user: %s, password as given\n", c.Web.Admin.Username)

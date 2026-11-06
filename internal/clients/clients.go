@@ -27,7 +27,7 @@ func New(c *config.Config, name string, expires *time.Time) (config.Client, erro
 	if err != nil {
 		return config.Client{}, err
 	}
-	return config.Client{Name: name, Enabled: true, Address: addr, Expires: expires}, nil
+	return config.Client{Name: name, Enabled: true, Ingress: c.Ingresses[0].Name, Address: addr, Expires: expires}, nil
 }
 
 // Rekey gives cl fresh keys and returns its config file. The private key
@@ -89,7 +89,8 @@ func Render(c *config.Config, cl config.Client, privateKey string) (string, erro
 	i.Set("Address", cl.Address.String()+"/32")
 	i.Set("DNS", c.ServerIP().String())
 	i.Set("MTU", strconv.Itoa(c.Server.MTU))
-	a := c.Server.AWG
+	in := c.ClientIngress(cl)
+	a := in.AWG
 	for _, kv := range [][2]string{
 		{"Jc", strconv.Itoa(a.Jc)}, {"Jmin", strconv.Itoa(a.Jmin)}, {"Jmax", strconv.Itoa(a.Jmax)},
 		{"S1", strconv.Itoa(a.S1)}, {"S2", strconv.Itoa(a.S2)}, {"S3", strconv.Itoa(a.S3)}, {"S4", strconv.Itoa(a.S4)},
@@ -114,7 +115,7 @@ func Render(c *config.Config, cl config.Client, privateKey string) (string, erro
 	p := f.Add("Peer")
 	p.Set("PublicKey", pub)
 	p.Set("PresharedKey", cl.PresharedKey)
-	p.Set("Endpoint", fmt.Sprintf("%s:%d", hostForEndpoint(c.Server.Endpoint), c.Server.ListenPort))
+	p.Set("Endpoint", fmt.Sprintf("%s:%d", hostForEndpoint(c.Server.Endpoint), in.ListenPort))
 	p.Set("AllowedIPs", "0.0.0.0/0")
 	p.Set("PersistentKeepalive", "25")
 	return f.String(), nil

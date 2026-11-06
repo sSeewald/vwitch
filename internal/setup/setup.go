@@ -40,12 +40,12 @@ func NewConfig(o Options) (*config.Config, string, error) {
 		return nil, "", err
 	}
 	c.Server.PrivateKey = key.String()
-	c.Server.AWG = ingress.GenerateParams(ingress.NewRand())
+	c.Ingresses[0].AWG = ingress.GenerateParams(ingress.NewRand())
 	c.Server.Endpoint = o.Endpoint
 	c.Server.AllowDirect = o.AllowDirect
 	c.Server.LockdownSSH = o.LockdownSSH
 	if o.ListenPort != 0 {
-		c.Server.ListenPort = o.ListenPort
+		c.Ingresses[0].ListenPort = o.ListenPort
 	}
 	if o.Address.IsValid() {
 		c.Server.Address = o.Address

@@ -3,6 +3,7 @@ package daemon
 import (
 	"slices"
 
+	"github.com/sseewald/vwitch/internal/config"
 	"github.com/sseewald/vwitch/internal/exposure"
 )
 
@@ -47,7 +48,7 @@ func (d *Daemon) Security() Security {
 		switch {
 		case c.ClientNet().Contains(s.Addr.Addr()): // portal, DNS: only via awg0
 			return true
-		case s.Proto == "udp" && (port == c.Server.ListenPort || tunnels[port]): // ingress, egress tunnels
+		case s.Proto == "udp" && (ingressPort(c, port) || tunnels[port]): // ingresses, egress tunnels
 			return true
 		case s.Proto == "tcp" && port == admin: // firewall allows admin interfaces only
 			return true
@@ -63,4 +64,8 @@ func (d *Daemon) Security() Security {
 		}
 	}
 	return sec
+}
+
+func ingressPort(c *config.Config, port uint16) bool {
+	return slices.ContainsFunc(c.Ingresses, func(in config.Ingress) bool { return in.ListenPort == port })
 }

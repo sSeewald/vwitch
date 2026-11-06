@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sseewald/vwitch/internal/config"
@@ -67,8 +68,8 @@ func BuildView(st daemon.Status, cs daemon.ClientStatus, allowed []config.Portal
 	switch {
 	case st.Switches.KillSwitch:
 		v.State, v.Tone = "killswitch", "bad"
-	case cs.Block:
-		v.State, v.Tone = "block", "bad"
+	case cs.Block: // paused by the client or the admin, not by a failure
+		v.State, v.Tone = "paused", "bad"
 		add(config.ActionBlock, false, "", false)
 	case cs.Exit == "direct" && (cs.Fast || st.Switches.Fast):
 		v.State, v.Tone = "fast", "accent"
@@ -100,8 +101,46 @@ func (p *Portal) Handler() http.Handler {
 	m.HandleFunc("POST /action", p.action)
 	m.HandleFunc("/", p.page)
 	// cross-origin protection: a website a client visits cannot flip that
-	// client's switches through its browser
-	return http.NewCrossOriginProtection().Handler(web.LangMiddleware(web.SecurityHeaders(m)))
+	// client's switches through its browser; the host check closes the same
+	// path via DNS rebinding (a foreign name resolving to the server address)
+	return hostGuard(p.d.Config, http.NewCrossOriginProtection().Handler(web.LangMiddleware(web.SecurityHeaders(m))))
+}
+
+// hostGuard serves only requests addressed to vwitch's own names or the
+// server address. Other GETs are redirected to the first name, so the page
+// still works as captive portal for any address a client opens; anything
+// else is refused.
+func hostGuard(conf func() *config.Config, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c := conf()
+		if ownHost(c, r.Host) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		home := c.Server.Address.Addr().String()
+		if len(c.Web.Hostnames) > 0 {
+			home = c.Web.Hostnames[0]
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		http.Redirect(w, r, "http://"+home+"/", http.StatusFound)
+	})
+}
+
+// ownHost reports whether a Host header names vwitch itself.
+func ownHost(c *config.Config, hostport string) bool {
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
+	}
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	if a, err := netip.ParseAddr(host); err == nil {
+		return a.Unmap() == c.Server.Address.Addr()
+	}
+	return slices.ContainsFunc(c.Web.Hostnames, func(n string) bool { return strings.EqualFold(n, host) })
 }
 
 func (p *Portal) client(r *http.Request) daemon.ClientStatus {

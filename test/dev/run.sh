@@ -34,9 +34,64 @@ egress() {
 }
 egress home 192.168.1.201/24 home.example.org:51820
 egress office 10.20.0.2/32 office.example.org:51820
-for c in phone laptop tablet; do docker exec "$NAME" vwitch client add "$c" >/dev/null; done
+docker exec "$NAME" vwitch ingress add secure --strict --isolated >/dev/null
+for c in phone laptop; do docker exec "$NAME" vwitch client add "$c" >/dev/null; done
+docker exec "$NAME" vwitch client add tablet --ingress secure >/dev/null
 docker exec "$NAME" vwitch route set streaming --via home netflix.com youtube.com googlevideo.com >/dev/null
 docker exec "$NAME" vwitch route set work --via office corp.example.com >/dev/null
+
+docker exec "$NAME" vwitch block add ads.example doubleclick.net >/dev/null
+
+# demo traffic history: stop (it saves its own on shutdown), add, start
+docker stop "$NAME" >/dev/null
+awk -v now="$(date +%s)" 'BEGIN {
+  srand(7); split("1h:10:3600 24h:300:86400 7d:3600:604800 30d:21600:2592000", rs, " ")
+  split("phone laptop tablet", cs, " "); w["phone"] = 3; w["laptop"] = 8; w["tablet"] = 1
+  printf "{\"series\":{"
+  for (r = 1; r <= 4; r++) {
+    split(rs[r], f, ":"); step = f[2]; n = f[3] / step; end = now - now % step
+    printf "%s\"%s\":{", (r > 1 ? "," : ""), f[1]
+    delete td; delete tu
+    for (c = 1; c <= 3; c++) {
+      printf "%s\"%s\":{", (c > 1 ? "," : ""), cs[c]
+      for (i = 0; i < n; i++) {
+        t = end - i * step; h = (t % 86400) / 3600
+        base = w[cs[c]] * 20000 * step * (1.2 + sin((h - 14) / 24 * 6.283)) * (0.4 + rand())
+        d = int(base); u = int(base * (0.08 + rand() * 0.1)); td[t] += d; tu[t] += u
+        printf "%s\"%d\":{\"d\":%d,\"u\":%d}", (i ? "," : ""), t, d, u
+      }
+      printf "}"
+    }
+    printf ",\"\":{"; k = 0
+    for (t in td) printf "%s\"%s\":{\"d\":%d,\"u\":%d}", (k++ ? "," : ""), t, td[t], tu[t]
+    printf "}}"
+  }
+  printf "}}\n"
+}' > "${TMPDIR:-/tmp}/vwitch-dev-traffic.json"
+docker cp "${TMPDIR:-/tmp}/vwitch-dev-traffic.json" "$NAME:/var/lib/vwitch/traffic.json" >/dev/null
+rm -f "${TMPDIR:-/tmp}/vwitch-dev-traffic.json"
+docker start "$NAME" >/dev/null
+i=0
+until docker exec "$NAME" vwitch status >/dev/null 2>&1; do
+  i=$((i + 1)); [ "$i" -lt 30 ] || { docker logs "$NAME"; exit 1; }
+  sleep 0.5
+done
+
+# demo lookups from the client addresses, in a helper sharing the network
+# namespace; untracked, so the client masquerade does not rewrite them on lo
+# (the answers do not come back then, the lookups are recorded anyway)
+docker run --rm --network "container:$NAME" --cap-add NET_ADMIN \
+  alpine:3.24@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a sh -c '
+  apk add -q --no-cache bind-tools nftables >/dev/null
+  nft add table ip dev_seed
+  nft add chain ip dev_seed out "{ type filter hook output priority raw; }"
+  nft add rule ip dev_seed out ip daddr 10.8.0.1 udp dport 53 notrack
+  q() { ip addr add "$1/32" dev lo 2>/dev/null; shift_ip=$1; shift
+    for n in "$@"; do dig +short +tries=1 +retry=0 +time=1 -b "$shift_ip" @10.8.0.1 "$n" A >/dev/null; done; }
+  q 10.8.0.2 www.youtube.com i.ytimg.com rr3.googlevideo.com ads.example tracker.ads.example api.github.com
+  q 10.8.0.3 github.com api.github.com stats.doubleclick.net news.ycombinator.com www.wikipedia.org
+  q 10.8.0.4 www.netflix.com assets.nflxext.com www.wikipedia.org ads.example
+  nft delete table ip dev_seed' >/dev/null 2>&1 || true
 
 echo "vwitch dev: https://127.0.0.1:$PORT  user: admin  password: $PASSWORD"
 echo "CLI: docker exec $NAME vwitch status   logs: make dev-logs   stop: make dev-stop"

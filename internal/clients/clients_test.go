@@ -16,7 +16,7 @@ func TestNewAndRender(t *testing.T) {
 	k, _ := wgtypes.GeneratePrivateKey()
 	c.Server.PrivateKey = k.String()
 	c.Server.Endpoint = "203.0.113.10"
-	c.Server.AWG = config.AWGParams{Jc: 4, Jmin: 40, Jmax: 200, S1: 10, S2: 20, S3: 1, S4: 2,
+	c.Ingresses[0].AWG = config.AWGParams{Jc: 4, Jmin: 40, Jmax: 200, S1: 10, S2: 20, S3: 1, S4: 2,
 		H1: "1-2", H2: "3-4", H3: "5-6", H4: "7-8"}
 	cl, err := New(c, "laptop", nil)
 	if err != nil {
@@ -62,7 +62,7 @@ func TestRenderAWG31(t *testing.T) {
 	c := config.New()
 	k, _ := wgtypes.GeneratePrivateKey()
 	c.Server.PrivateKey, c.Server.Endpoint = k.String(), "203.0.113.10"
-	c.Server.AWG = config.AWGParams{Jc: 4, Jmin: 40, Jmax: 200, S1: 20, S2: 30, S3: 12, S4: 12,
+	c.Ingresses[0].AWG = config.AWGParams{Jc: 4, Jmin: 40, Jmax: 200, S1: 20, S2: 30, S3: 12, S4: 12,
 		H1: "1-2", H2: "3-4", H3: "5-6", H4: "7-8", ContentPadding: "8-96", DisableCookies: true}
 	cl := config.Client{Name: "old", Address: netip.MustParseAddr("10.8.0.2")}
 	get := func(cl config.Client, key string) string {
@@ -82,7 +82,7 @@ func TestRenderAWG31(t *testing.T) {
 		t.Fatal("AWG 3.1 client")
 	}
 	cl.AWG3 = false
-	c.Server.AWG.HeaderProtectionKey, c.Server.AWG.RandomTrailers = "a2V5", true
+	c.Ingresses[0].AWG.HeaderProtectionKey, c.Ingresses[0].AWG.RandomTrailers = "a2V5", true
 	if get(cl, "HeaderProtectionKey") != "a2V5" || get(cl, "RandomTrailers") != "1" {
 		t.Fatal("strict mode must reach every client")
 	}

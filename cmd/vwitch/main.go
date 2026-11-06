@@ -31,7 +31,7 @@ func main() {
 	root.PersistentFlags().StringVar(&g.socket, "socket", config.DefaultSocket, "API socket of the running daemon")
 	root.PersistentFlags().BoolVar(&g.json, "json", false, "JSON output where supported")
 	root.AddCommand(
-		serveCmd(g), setupCmd(g), doctorCmd(g), statusCmd(g), egressCmd(g), clientCmd(g), routeCmd(g),
+		serveCmd(g), setupCmd(g), doctorCmd(g), statusCmd(g), ingressCmd(g), egressCmd(g), clientCmd(g), routeCmd(g), blockCmd(g),
 		switchCmd(g, "killswitch", "kill_switch", "Block all client traffic immediately"),
 		switchCmd(g, "fast", "fast", "Send all clients through the server's own uplink"),
 		setCmd(g), configCmd(g), reloadCmd(g), adminCmd(g), tlsCmd(g), cloudInitCmd(),

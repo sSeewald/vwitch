@@ -19,6 +19,7 @@ import (
 	"github.com/sseewald/vwitch/internal/exposure"
 	"github.com/sseewald/vwitch/internal/firewall"
 	"github.com/sseewald/vwitch/internal/ingress"
+	"github.com/sseewald/vwitch/internal/nflog"
 	"github.com/sseewald/vwitch/internal/routing"
 	"github.com/sseewald/vwitch/internal/selector"
 	"github.com/sseewald/vwitch/internal/state"
@@ -30,16 +31,32 @@ type fakeSys struct {
 	probeOK   map[string]bool
 	routes    routing.Plan
 	fw        []firewall.Rule
+	block     []firewall.Rule
+	blockSets []firewall.Set
 	flushed   [][]netip.Addr
-	peers     []ingress.Peer
+	peers     map[string][]ingress.Peer // by ingress interface
+	ingresses map[string]ingress.Spec
 	sockets   []exposure.Socket
 	addrs     map[string][]netip.Addr // by interface
 	up        map[string]bool
 }
 
-func (f *fakeSys) Prepare() error                        { return nil }
-func (f *fakeSys) IngressUp(ingress.Spec) error          { return nil }
-func (f *fakeSys) SyncPeers(p []ingress.Peer) error      { f.peers = p; return nil }
+func (f *fakeSys) Prepare() error { return nil }
+func (f *fakeSys) IngressUp(s ingress.Spec) error {
+	if f.ingresses == nil {
+		f.ingresses = map[string]ingress.Spec{}
+	}
+	f.ingresses[s.Name] = s
+	return nil
+}
+func (f *fakeSys) IngressDown(i string) error { delete(f.ingresses, i); delete(f.peers, i); return nil }
+func (f *fakeSys) SyncPeers(i string, p []ingress.Peer) error {
+	if f.peers == nil {
+		f.peers = map[string][]ingress.Peer{}
+	}
+	f.peers[i] = p
+	return nil
+}
 func (f *fakeSys) SyncEgresses([]egress.Spec) error      { return nil }
 func (f *fakeSys) InterfaceUp(i string) bool             { return f.up[i] }
 func (f *fakeSys) InterfaceAddrs(i string) []netip.Addr  { return f.addrs[i] }
@@ -47,6 +64,14 @@ func (f *fakeSys) Listening() ([]exposure.Socket, error) { return f.sockets, nil
 func (f *fakeSys) Close() error                          { return nil }
 func (f *fakeSys) ApplyRouting(p routing.Plan) error     { f.routes = p; return nil }
 func (f *fakeSys) ApplyFirewall(r []firewall.Rule) error { f.fw = r; return nil }
+func (f *fakeSys) ApplyBlock(s []firewall.Set, r []firewall.Rule) error {
+	f.blockSets, f.block = s, r
+	return nil
+}
+func (f *fakeSys) ListenBlocked(ctx context.Context, _ func(nflog.Hit)) error {
+	<-ctx.Done()
+	return nil
+}
 func (f *fakeSys) PeerStats() (map[string]ingress.PeerStats, error) {
 	return map[string]ingress.PeerStats{}, nil
 }
@@ -78,7 +103,7 @@ func setup(t *testing.T) (*Daemon, *fakeSys, *time.Time) {
 	c.Server.PrivateKey = key()
 	c.Server.Endpoint = "203.0.113.1"
 	c.Server.AllowDirect = true
-	c.Server.AWG = config.AWGParams{Jc: 4, Jmin: 40, Jmax: 200, S1: 10, S2: 20, H1: "1-2", H2: "3-4", H3: "5-6", H4: "7-8"}
+	c.Ingresses[0].AWG = config.AWGParams{Jc: 4, Jmin: 40, Jmax: 200, S1: 10, S2: 20, H1: "1-2", H2: "3-4", H3: "5-6", H4: "7-8"}
 	for i, n := range []string{"home", "office"} {
 		c.Egresses = append(c.Egresses, config.Egress{Name: n, Index: i + 1, Enabled: true, Priority: (i + 1) * 10,
 			Endpoint: "192.0.2.1:51820", Address: netip.MustParseAddr("192.168.1.2"), PrivateKey: key(), PublicKey: key()})
@@ -219,14 +244,14 @@ func TestOfflineAskThenAutoReturn(t *testing.T) {
 func TestRemoveClientOffboards(t *testing.T) {
 	d, sys, _ := setup(t)
 	d.reconcile(context.Background())
-	if len(sys.peers) != 1 {
+	if len(sys.peers["awg0"]) != 1 {
 		t.Fatal("peer missing")
 	}
 	if err := d.RemoveClient("phone"); err != nil {
 		t.Fatal(err)
 	}
 	d.reconcile(context.Background())
-	if len(sys.peers) != 0 {
+	if len(sys.peers["awg0"]) != 0 {
 		t.Fatal("peer still configured")
 	}
 }
@@ -434,24 +459,150 @@ func TestCertFollowsHostnames(t *testing.T) {
 	}
 }
 
-func TestSetAWGStrict(t *testing.T) {
-	c := config.New()
-	c.Server.AWG = ingress.GenerateParams(ingress.NewRand())
-	for _, kv := range [][2]string{{"awg.strict", "true"}, {"awg.content_padding", "off"}, {"awg.disable_cookies", "false"}} {
-		if err := set(c, kv[0], kv[1]); err != nil {
-			t.Fatal(err)
-		}
-	}
-	a := c.Server.AWG
+func TestIngressOptions(t *testing.T) {
+	in := config.Ingress{AWG: ingress.GenerateParams(ingress.NewRand())}
+	on, off := true, false
+	IngressOptions{Strict: &on, ContentPadding: &off, DisableCookies: &off}.apply(&in)
+	a := in.AWG
 	if !a.Strict() || a.ContentPadding != "" || a.DisableCookies {
 		t.Fatalf("%+v", a)
 	}
-	_ = set(c, "awg.strict", "true") // idempotent: same key
-	if c.Server.AWG.HeaderProtectionKey != a.HeaderProtectionKey {
+	IngressOptions{Strict: &on}.apply(&in) // idempotent: same key
+	if in.AWG.HeaderProtectionKey != a.HeaderProtectionKey {
 		t.Fatal("key changed")
 	}
-	_ = set(c, "awg.strict", "false")
-	if c.Server.AWG.Strict() {
+	IngressOptions{Strict: &off}.apply(&in)
+	if in.AWG.Strict() {
 		t.Fatal("still strict")
+	}
+}
+
+func TestIngresses(t *testing.T) {
+	d, sys, _ := setup(t)
+	ctx := context.Background()
+	on := true
+	if err := d.AddIngress("strict", IngressOptions{Strict: &on, Isolated: &on}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddIngress("open", IngressOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddIngress("open", IngressOptions{}); err == nil {
+		t.Fatal("duplicate name accepted")
+	}
+	c := d.Config()
+	s, _ := c.Ingress("strict")
+	o, _ := c.Ingress("open")
+	if s.Interface != "awg1" || s.ListenPort != config.DefaultListenPort+1 || !s.AWG.Strict() || !s.Isolated {
+		t.Fatalf("strict ingress: %+v", s)
+	}
+	if o.Interface != "awg2" || o.ListenPort != config.DefaultListenPort+2 {
+		t.Fatalf("open ingress: %+v", o)
+	}
+	// only the non-isolated ingress may reach the admin UI
+	if slices.Contains(c.Server.AdminInterfaces, "awg1") || !slices.Contains(c.Server.AdminInterfaces, "awg2") {
+		t.Fatalf("admin interfaces: %v", c.Server.AdminInterfaces)
+	}
+
+	name := "strict"
+	if _, err := d.AddClient("laptop", ClientOptions{Ingress: &name}); err != nil {
+		t.Fatal(err)
+	}
+	if cl, _ := d.Config().Client("laptop"); !cl.AWG3 || cl.Ingress != "strict" {
+		t.Fatalf("client on strict ingress: %+v", cl)
+	}
+	bad := "nope"
+	if _, err := d.AddClient("x", ClientOptions{Ingress: &bad}); err == nil {
+		t.Fatal("unknown ingress accepted")
+	}
+	d.reconcile(ctx)
+	if len(sys.ingresses) != 3 || len(sys.peers["awg0"]) != 1 || len(sys.peers["awg1"]) != 1 || len(sys.peers["awg2"]) != 0 {
+		t.Fatalf("ingresses %v, peers %v", sys.ingresses, sys.peers)
+	}
+
+	// in use: cannot be removed until the client moves
+	if err := d.RemoveIngress("strict"); err == nil {
+		t.Fatal("removed an ingress with clients")
+	}
+	def := config.DefaultIngress
+	if err := d.UpdateClient("laptop", ClientOptions{Ingress: &def}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.RemoveIngress("strict"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.RemoveIngress("open"); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(d.Config().Server.AdminInterfaces, "awg2") {
+		t.Fatal("admin interface of a removed ingress kept")
+	}
+	if err := d.RemoveIngress(config.DefaultIngress); err == nil {
+		t.Fatal("removed the last ingress")
+	}
+	d.reconcile(ctx)
+	if len(sys.ingresses) != 1 || len(sys.peers["awg0"]) != 2 {
+		t.Fatalf("after removal: ingresses %v, peers %v", sys.ingresses, sys.peers)
+	}
+}
+
+func TestRouteDomain(t *testing.T) {
+	d, _, _ := setup(t)
+	if err := d.SetRoute("google", "office", []string{"google.de", "google.com"}); err != nil {
+		t.Fatal(err)
+	}
+	// joins a new route named after the egress and leaves the old one
+	if err := d.RouteDomain("google.de", "home"); err != nil {
+		t.Fatal(err)
+	}
+	if r, ok := d.Config().Route("home"); !ok || r.Egress != "home" || !slices.Equal(r.Domains, []string{"google.de"}) {
+		t.Fatalf("new route: %+v", r)
+	}
+	if r, _ := d.Config().Route("google"); !slices.Equal(r.Domains, []string{"google.com"}) {
+		t.Fatalf("old route keeps the rest: %v", r.Domains)
+	}
+	// joins the existing route of the egress; the emptied route goes away
+	if err := d.RouteDomain("google.com", "home"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := d.Config().Route("google"); ok {
+		t.Fatal("empty route kept")
+	}
+	if r, _ := d.Config().Route("home"); !slices.Equal(r.Domains, []string{"google.com", "google.de"}) {
+		t.Fatalf("existing route: %v", r.Domains)
+	}
+	if err := d.RouteDomain("x.de", "nope"); err == nil {
+		t.Fatal("unknown egress accepted")
+	}
+}
+
+func TestNewClientsAWG3Default(t *testing.T) {
+	d, _, _ := setup(t)
+	on := true
+	if err := d.SetIngress(config.DefaultIngress, IngressOptions{ContentPadding: &on, NewClientsAWG3: &on}); err != nil {
+		t.Fatal(err)
+	}
+	conf, err := d.AddClient("a", ClientOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cl, _ := d.Config().Client("a"); !cl.AWG3 || !strings.Contains(conf, "ContentPaddingAddition") {
+		t.Fatalf("default not applied: %+v", cl)
+	}
+	off := false
+	if _, err := d.AddClient("b", ClientOptions{AWG3: &off}); err != nil {
+		t.Fatal(err)
+	}
+	if cl, _ := d.Config().Client("b"); cl.AWG3 {
+		t.Fatal("opt-out ignored")
+	}
+	if err := d.SetIngress(config.DefaultIngress, IngressOptions{NewClientsAWG3: &off}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.AddClient("c", ClientOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if cl, _ := d.Config().Client("c"); cl.AWG3 {
+		t.Fatal("default off ignored")
 	}
 }

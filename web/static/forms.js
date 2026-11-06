@@ -47,7 +47,7 @@
   function save() {
     var f = pending.form;
     fetch(f.action, { method: "POST", body: new FormData(f), credentials: "same-origin" }).then(function (r) {
-      if (r.redirected && r.url.indexOf("?saved") >= 0) {
+      if (r.redirected && /[?&]saved(=|&|$)/.test(r.url)) {
         snapshots.set(f, state(f));
         proceed();
         return;
@@ -90,6 +90,23 @@
     ask(f, function () { target.requestSubmit(submitter); });
   }, true);
 
+  // an open action menu closes on a click elsewhere
+  document.addEventListener("click", function (e) {
+    document.querySelectorAll("details.menu[open]").forEach(function (m) { if (!m.contains(e.target)) m.open = false; });
+  });
+
+  // filters that apply on change
+  document.addEventListener("change", function (e) {
+    if (e.target.matches("select[data-autosubmit]")) e.target.form.requestSubmit();
+    // a new client's AWG 3.1 switch follows the default of the chosen ingress
+    if (e.target.matches("select[data-ingress]")) {
+      var o = e.target.selectedOptions[0], sw = e.target.form.querySelector("label[data-awg3]");
+      if (!o || !sw) return;
+      sw.hidden = o.dataset.strict === "true";
+      sw.querySelector("input").checked = o.dataset.awg3 === "true";
+    }
+  });
+
   window.addEventListener("beforeunload", function (e) {
     if (!bypass && dirtyForm()) { e.preventDefault(); e.returnValue = ""; }
   });
@@ -97,8 +114,10 @@
   // after a save: drop ?saved from the address bar and fade the notice out
   function settle() {
     snapshot();
-    if (location.search.indexOf("saved") >= 0) {
-      history.replaceState(history.state, "", location.pathname);
+    var q = new URLSearchParams(location.search);
+    if (q.has("saved")) {
+      q.delete("saved");
+      history.replaceState(history.state, "", location.pathname + (q.toString() ? "?" + q : ""));
     }
     document.querySelectorAll("[data-toast]").forEach(function (t) {
       setTimeout(function () { t.remove(); }, 3000);

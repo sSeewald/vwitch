@@ -2,10 +2,13 @@
 <div class="card stack">
   <div class="row">
     <h1>{{$c.Name}}</h1><span class="spacer"></span>
+    {{template "pinned" (withLang $l $c)}}
     <span class="pill">{{exitLabel $l $c.Exit $c.Egress}}</span>
   </div>
   {{with reasonText $l $c.Reason}}<p class="muted small">{{.}}</p>{{end}}
 </div>
+
+<section class="card stack chart-card">{{template "traffic-chart" (list $l "24h" $c.Name "")}}<a class="small" href="/activity?range=24h&client={{$c.Name}}">{{t $l "act.client_more"}}</a></section>
 
 <form class="card stack" method="post" action="/clients/{{$c.Name}}" style="margin-top:12px">
   <label class="check"><span>{{t $l "client.enabled"}}<span class="hint">{{t $l "client.enabled.hint"}}</span></span><input class="switch" type="checkbox" name="enabled" value="true" {{if $c.Enabled}}checked{{end}}></label>
@@ -17,7 +20,10 @@
       {{if hasPrefix $route "strategy:"}}<option value="{{$route}}" selected>{{t $l (print "strategy." $c.Strategy)}}</option>{{end}}
     </select>
     <p class="hint">{{t $l "client.route.hint"}}</p></div>
-  {{if .Data.Strict}}<p class="hint">{{t $l "client.awg3.strict"}}</p>{{else}}
+  {{if gt (len .Data.Ingresses) 1}}<div class="field"><label for="cin">{{t $l "client.ingress"}}</label>
+    <select id="cin" name="ingress">{{range .Data.Ingresses}}<option value="{{.Name}}" {{if eq .Name $c.Ingress}}selected{{end}}>{{.Name}} · UDP {{.ListenPort}}{{if .AWG.Strict}} · {{t $l "ingress.strict"}}{{end}}</option>{{end}}</select>
+    <p class="hint">{{t $l "client.ingress.change"}}</p></div>{{end}}
+  {{if $c.Strict}}<p class="hint">{{t $l "client.awg3.strict"}}</p>{{else}}
   <label class="check"><span>{{t $l "client.awg3"}}<span class="hint">{{t $l "client.awg3.hint"}}</span></span><input class="switch" type="checkbox" name="awg3" value="true" {{if $c.AWG3}}checked{{end}}></label>{{end}}
   <div class="field"><label for="exp">{{t $l "client.expires"}}</label>
     <input id="exp" type="date" name="expires" value="{{if $c.Expires}}{{(lastDay $c.Expires).Format "2006-01-02"}}{{end}}">

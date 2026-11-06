@@ -7,6 +7,7 @@ import (
 
 // Defaults for new configurations and missing fields.
 const (
+	DefaultIngress     = "default"
 	DefaultInterface   = "awg0"
 	DefaultListenPort  = 51845
 	DefaultMTU         = 1340
@@ -36,20 +37,23 @@ func New() *Config {
 // explicitly set values.
 func (c *Config) ApplyDefaults() {
 	s := &c.Server
-	setDefault(&s.Interface, DefaultInterface)
-	setDefault(&s.ListenPort, DefaultListenPort)
+	c.migrateIngress()
 	setDefault(&s.MTU, DefaultMTU)
 	if !s.Address.IsValid() {
 		s.Address = DefaultAddress
 	}
 	if s.AdminInterfaces == nil {
-		s.AdminInterfaces = []string{"lo", s.Interface} // localhost and every VPN client
+		s.AdminInterfaces = []string{"lo", c.Ingresses[0].Interface} // localhost and every VPN client
+	}
+	for i := range c.Clients {
+		setDefault(&c.Clients[i].Ingress, c.Ingresses[0].Name)
 	}
 	if !c.DNS.Resolver.IsValid() {
 		c.DNS.Resolver = DefaultResolver
 	}
 	setDefault(&c.Selection.Strategy, StrategyFailover)
 	setDefault(&c.Selection.Offline, OfflineBlock)
+	c.Security.applyDefaults()
 
 	h := &c.Health
 	setDefault(&h.Interval, 10*time.Second)
@@ -82,6 +86,19 @@ func (c *Config) ApplyDefaults() {
 		setDefault(&e.Weight, DefaultWeight)
 		setDefault(&e.Keepalive, DefaultKeepalive)
 	}
+}
+
+// migrateIngress moves the single ingress of older configs (server.interface,
+// listen_port, awg) into the first ingress, so their clients keep working.
+func (c *Config) migrateIngress() {
+	s := &c.Server
+	if len(c.Ingresses) == 0 {
+		in := Ingress{Name: DefaultIngress, Interface: s.LegacyInterface, ListenPort: s.LegacyListenPort, AWG: s.LegacyAWG}
+		setDefault(&in.Interface, DefaultInterface)
+		setDefault(&in.ListenPort, DefaultListenPort)
+		c.Ingresses = []Ingress{in}
+	}
+	s.LegacyInterface, s.LegacyListenPort, s.LegacyAWG = "", 0, AWGParams{}
 }
 
 func setDefault[T comparable](p *T, v T) {

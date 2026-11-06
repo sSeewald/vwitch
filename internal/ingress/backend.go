@@ -46,18 +46,22 @@ type Backend interface {
 	Close() error
 }
 
-// SpecFromConfig derives the interface spec.
-func SpecFromConfig(c *config.Config) Spec {
+// Specs derives one interface spec per ingress.
+func Specs(c *config.Config) []Spec {
 	s := c.Server
-	return Spec{Name: s.Interface, Address: s.Address, ListenPort: s.ListenPort, MTU: s.MTU,
-		PrivateKey: s.PrivateKey, AWG: s.AWG}
+	out := make([]Spec, len(c.Ingresses))
+	for i, in := range c.Ingresses {
+		out[i] = Spec{Name: in.Interface, Address: s.Address, ListenPort: in.ListenPort, MTU: s.MTU,
+			PrivateKey: s.PrivateKey, AWG: in.AWG}
+	}
+	return out
 }
 
-// PeersFromConfig returns the peers of all active clients.
-func PeersFromConfig(c *config.Config, now time.Time) []Peer {
+// Peers returns the active clients of one ingress.
+func Peers(c *config.Config, in config.Ingress, now time.Time) []Peer {
 	var ps []Peer
 	for _, cl := range c.Clients {
-		if cl.Active(now) {
+		if cl.Active(now) && c.ClientIngress(cl).Name == in.Name {
 			ps = append(ps, Peer{PublicKey: cl.PublicKey, PresharedKey: cl.PresharedKey, Addr: cl.Address})
 		}
 	}

@@ -20,11 +20,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sseewald/vwitch/internal/activity"
 	"github.com/sseewald/vwitch/internal/auth"
 	"github.com/sseewald/vwitch/internal/config"
 	"github.com/sseewald/vwitch/internal/daemon"
 	"github.com/sseewald/vwitch/internal/i18n"
-	"github.com/sseewald/vwitch/internal/ingress"
 	"github.com/sseewald/vwitch/internal/qr"
 )
 
@@ -62,8 +62,8 @@ const (
 )
 
 var nav = []NavItem{
-	{"/", "nav.dashboard"}, {"/egresses", "nav.egresses"}, {"/clients", "nav.clients"}, {"/routes", "nav.routes"},
-	{"/settings", "nav.settings"},
+	{"/", "nav.dashboard"}, {"/ingresses", "nav.ingresses"}, {"/egresses", "nav.egresses"}, {"/clients", "nav.clients"}, {"/routes", "nav.routes"},
+	{"/activity", "nav.activity"}, {"/security", "nav.security"}, {"/settings", "nav.settings"},
 }
 
 // Handler returns the routes, protected against cross-origin requests.
@@ -77,8 +77,22 @@ func (a *Admin) Handler() http.Handler {
 	p := func(pattern string, h http.HandlerFunc) { m.Handle(pattern, a.requireLogin(h)) }
 	p("GET /{$}", a.page("dashboard", "nav.dashboard"))
 	p("GET /events", a.events)
-	p("GET /security", a.security)
+	p("GET /security", a.securityPage)
+	p("GET /security/check", a.security)
+	p("GET /security/log", a.securityLog)
+	p("POST /security/regions", a.saveRegions)
+	p("POST /security/domains", a.saveDomains)
+	p("GET /activity", a.activity)
+	p("POST /activity/block", a.activityChange(a.blockToggle))
+	p("POST /activity/route", a.activityChange(a.routeDomain))
+	p("GET /traffic", a.traffic)
 	p("POST /switches", a.switches)
+	p("GET /ingresses", a.ingresses)
+	p("POST /ingresses", a.form("/ingresses", "ingresses", a.addIngress))
+	p("POST /ingresses/{name}", a.form("/ingresses", "ingresses", a.updateIngress))
+	p("POST /ingresses/{name}/delete", a.form("/ingresses", "ingresses", func(r *http.Request) error {
+		return a.d.RemoveIngress(r.PathValue("name"))
+	}))
 	p("GET /egresses", a.page("egresses", "nav.egresses"))
 	p("POST /egresses", a.addEgress)
 	p("POST /egresses/{name}", a.updateEgress)
@@ -121,9 +135,6 @@ func (a *Admin) Handler() http.Handler {
 			return a.d.SetPassword(pw)
 		}
 		return nil
-	}))
-	p("POST /settings/awg-strict", a.form("/settings", "settings", func(r *http.Request) error {
-		return a.d.Set("awg.strict", strconv.FormatBool(r.FormValue("on") == "true"))
 	}))
 	p("POST /settings/tls", a.form("/settings", "settings", a.uploadTLS))
 	p("POST /settings/tls/delete", a.form("/settings", "settings", func(*http.Request) error {
@@ -343,6 +354,9 @@ func (a *Admin) form(back, page string, fn func(*http.Request) error) http.Handl
 			p.Path = back
 			p.Error = err.Error()
 			p.Data = a.data()
+			if page == "ingresses" {
+				p.Data = a.ingressesData()
+			}
 			a.r.Page(w, page, p)
 			return
 		}
@@ -355,7 +369,11 @@ func (a *Admin) form(back, page string, fn func(*http.Request) error) http.Handl
 const savedParam = "saved"
 
 func savedRedirect(w http.ResponseWriter, r *http.Request, back string) {
-	http.Redirect(w, r, back+"?"+savedParam, http.StatusSeeOther)
+	sep := "?"
+	if strings.Contains(back, "?") {
+		sep = "&"
+	}
+	http.Redirect(w, r, back+sep+savedParam, http.StatusSeeOther)
 }
 
 // events streams rendered fragments of the dashboard via SSE.
@@ -500,7 +518,12 @@ func (a *Admin) addClient(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		text, err := a.d.AddClient(name, daemon.ClientOptions{Expires: exp})
+		awg3 := r.FormValue("awg3") == "true"
+		o := daemon.ClientOptions{Expires: exp, AWG3: &awg3}
+		if in := r.FormValue("ingress"); in != "" {
+			o.Ingress = &in
+		}
+		text, err := a.d.AddClient(name, o)
 		if err == nil {
 			a.issued(w, r, name, text, false)
 		}
@@ -549,7 +572,11 @@ type issuedPage struct {
 // dashboard because it scans /proc.
 func (a *Admin) security(w http.ResponseWriter, r *http.Request) {
 	p := a.basePage(r, "nav.dashboard")
-	p.Data = securityData{Security: a.d.Security(), ListenPort: a.d.Config().Server.ListenPort}
+	var ports []string
+	for _, in := range a.d.Config().Ingresses {
+		ports = append(ports, strconv.Itoa(int(in.ListenPort)))
+	}
+	p.Data = securityData{Security: a.d.Security(), ListenPorts: strings.Join(ports, ", ")}
 	html, err := a.r.Fragment("dashboard", "security", p)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -560,7 +587,7 @@ func (a *Admin) security(w http.ResponseWriter, r *http.Request) {
 
 type securityData struct {
 	daemon.Security
-	ListenPort uint16
+	ListenPorts string // of all ingresses
 }
 
 type clientPage struct {
@@ -568,7 +595,7 @@ type clientPage struct {
 	Egresses    []config.Egress
 	Strategy    config.Strategy // global strategy, shown for "automatic"
 	AllowDirect bool
-	Strict      bool // AWG 3.1 for every client
+	Ingresses   []config.Ingress
 }
 
 func (a *Admin) client(w http.ResponseWriter, r *http.Request) {
@@ -587,7 +614,7 @@ func (a *Admin) client(w http.ResponseWriter, r *http.Request) {
 	p := a.basePage(r, "nav.clients")
 	p.Path = "/clients"
 	c := a.d.Config()
-	p.Data = clientPage{cs, c.SortedEgresses(), c.Selection.Strategy, c.Server.AllowDirect, c.Server.AWG.Strict()}
+	p.Data = clientPage{cs, c.SortedEgresses(), c.Selection.Strategy, c.Server.AllowDirect, c.Ingresses}
 	a.r.Page(w, "client", p)
 }
 
@@ -601,6 +628,9 @@ func (a *Admin) updateClient(w http.ResponseWriter, r *http.Request) {
 		}
 		awg3 := r.FormValue("awg3") == "true"
 		o := daemon.ClientOptions{Enabled: &enabled, Expires: exp, NoExpiry: exp == nil, AWG3: &awg3}
+		if in := r.FormValue("ingress"); in != "" {
+			o.Ingress = &in
+		}
 		// one "connection" choice: auto, a fixed egress or direct; direct is
 		// the client's direct switch, so the egress choice stays untouched
 		direct := false
@@ -664,39 +694,29 @@ func (a *Admin) saveSettings(r *http.Request) error {
 		actions[i] = string(x)
 	}
 	current := map[string]string{
-		"strategy":            string(c.Selection.Strategy),
-		"fixed":               c.Selection.Fixed,
-		"offline":             string(c.Selection.Offline),
-		"allow_direct":        strconv.FormatBool(c.Server.AllowDirect),
-		"endpoint":            c.Server.Endpoint,
-		"resolver":            c.DNS.Resolver.String(),
-		"hostnames":           strings.Join(c.Web.Hostnames, ", "),
-		"portal_actions":      strings.Join(actions, ", "),
-		"admin_interfaces":    strings.Join(c.Server.AdminInterfaces, ", "),
-		"lockdown_ssh":        strconv.FormatBool(c.Server.LockdownSSH),
-		"language":            c.Web.Language,
-		"awg.disable_cookies": strconv.FormatBool(c.Server.AWG.DisableCookies),
-		"awg.content_padding": c.Server.AWG.ContentPadding,
+		"strategy":         string(c.Selection.Strategy),
+		"fixed":            c.Selection.Fixed,
+		"offline":          string(c.Selection.Offline),
+		"allow_direct":     strconv.FormatBool(c.Server.AllowDirect),
+		"endpoint":         c.Server.Endpoint,
+		"resolver":         c.DNS.Resolver.String(),
+		"hostnames":        strings.Join(c.Web.Hostnames, ", "),
+		"portal_actions":   strings.Join(actions, ", "),
+		"admin_interfaces": strings.Join(c.Server.AdminInterfaces, ", "),
+		"lockdown_ssh":     strconv.FormatBool(c.Server.LockdownSSH),
+		"language":         c.Web.Language,
+		"activity":         strconv.FormatBool(!c.Security.NoActivity),
 	}
 	// applied as one change and validated together; within it, allow_direct
 	// comes before offline and fixed before strategy
 	order := []string{"allow_direct", "fixed", "strategy", "offline", "endpoint", "resolver", "hostnames",
-		"portal_actions", "admin_interfaces", "lockdown_ssh", "language", "awg.disable_cookies", "awg.content_padding"}
+		"portal_actions", "admin_interfaces", "lockdown_ssh", "language", "activity"}
 	var changes [][2]string
 	for _, k := range order {
 		v := strings.TrimSpace(r.FormValue(k))
 		switch k {
-		case "allow_direct", "lockdown_ssh", "awg.disable_cookies":
+		case "allow_direct", "lockdown_ssh", "activity":
 			v = strconv.FormatBool(v == "true")
-		case "awg.content_padding": // a switch: keep the current range while on
-			switch {
-			case v != "true":
-				v = ""
-			case current[k] != "":
-				v = current[k]
-			default:
-				v = ingress.DefaultContentPadding
-			}
 		case "portal_actions": // one checkbox per action
 			v = strings.Join(r.Form["portal_actions"], ", ")
 		}
@@ -708,6 +728,92 @@ func (a *Admin) saveSettings(r *http.Request) error {
 		return nil
 	}
 	return a.d.SetMany(changes)
+}
+
+// --- ingresses ---
+
+// ingressOptions reads the ingress form; absent fields stay unchanged.
+func ingressOptions(r *http.Request) (daemon.IngressOptions, error) {
+	var o daemon.IngressOptions
+	if v := strings.TrimSpace(r.FormValue("listen_port")); v != "" {
+		n, err := strconv.ParseUint(v, 10, 16)
+		if err != nil || n == 0 {
+			return o, fmt.Errorf("invalid port %q", v)
+		}
+		p := uint16(n)
+		o.ListenPort = &p
+	}
+	flag := func(key string) *bool {
+		if !r.Form.Has(key + "_shown") { // the form shows this switch
+			return nil
+		}
+		b := r.FormValue(key) == "true"
+		return &b
+	}
+	if err := r.ParseForm(); err != nil {
+		return o, err
+	}
+	o.Strict, o.Isolated = flag("strict"), flag("isolated")
+	o.DisableCookies, o.ContentPadding, o.NewClientsAWG3 = flag("disable_cookies"), flag("content_padding"), flag("new_clients_awg3")
+	return o, nil
+}
+
+type ingressesPage struct {
+	pageData
+	Rows []ingressRow
+	Next uint16 // suggested port for a new ingress
+}
+
+type ingressRow struct {
+	config.Ingress
+	Status  daemon.IngressStatus
+	Traffic activity.Counter // of its clients, last 24 hours
+}
+
+func (a *Admin) ingressesData() ingressesPage {
+	d := a.data()
+	totals := a.d.TrafficTotals("24h")
+	p := ingressesPage{pageData: d, Next: config.DefaultListenPort}
+	for _, in := range d.Config.Ingresses {
+		row := ingressRow{Ingress: in, Status: daemon.IngressStatus{Name: in.Name}}
+		for _, st := range d.Status.Ingresses {
+			if st.Name == in.Name {
+				row.Status = st
+			}
+		}
+		for _, cl := range d.Config.Clients {
+			if cl.Ingress == in.Name {
+				t := totals[cl.Name]
+				row.Traffic.Down += t.Down
+				row.Traffic.Up += t.Up
+			}
+		}
+		p.Rows = append(p.Rows, row)
+		p.Next = max(p.Next, in.ListenPort+1)
+	}
+	return p
+}
+
+func (a *Admin) ingresses(w http.ResponseWriter, r *http.Request) {
+	p := a.basePage(r, "nav.ingresses")
+	p.Data = a.ingressesData()
+	a.r.Page(w, "ingresses", p)
+}
+
+func (a *Admin) addIngress(r *http.Request) error {
+	o, err := ingressOptions(r)
+	if err != nil {
+		return err
+	}
+	return a.d.AddIngress(strings.TrimSpace(r.FormValue("name")), o)
+}
+
+func (a *Admin) updateIngress(r *http.Request) error {
+	o, err := ingressOptions(r)
+	if err != nil {
+		return err
+	}
+	return a.d.SetIngress(r.PathValue("name"), o)
 }
 
 func remoteHost(r *http.Request) string {

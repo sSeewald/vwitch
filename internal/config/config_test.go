@@ -9,7 +9,7 @@ import (
 func validConfig() *Config {
 	c := New()
 	c.Server.PrivateKey = "x"
-	c.Server.AWG = AWGParams{Jc: 4, Jmin: 40, Jmax: 200, S1: 10, S2: 20, S3: 5, S4: 6,
+	c.Ingresses[0].AWG = AWGParams{Jc: 4, Jmin: 40, Jmax: 200, S1: 10, S2: 20, S3: 5, S4: 6,
 		H1: "100-200", H2: "300-400", H3: "500-600", H4: "700-800"}
 	c.Egresses = []Egress{{Name: "home", Index: 1, Enabled: true, Priority: 10,
 		Endpoint: "home.example.org:51820", Address: netip.MustParseAddr("192.168.1.201"),
@@ -43,8 +43,8 @@ func TestValidate(t *testing.T) {
 		{"ok", func(*Config) {}, ""},
 		{"lan resolver", func(c *Config) { c.DNS.Resolver = netip.MustParseAddr("192.168.178.1") }, "LAN"},
 		{"ask needs direct", func(c *Config) { c.Selection.Offline = OfflineAsk }, "allow_direct"},
-		{"overlapping headers", func(c *Config) { c.Server.AWG.H2 = "150-250" }, "overlaps"},
-		{"s1+56", func(c *Config) { c.Server.AWG.S2 = 66 }, "s1+56"},
+		{"overlapping headers", func(c *Config) { c.Ingresses[0].AWG.H2 = "150-250" }, "overlaps"},
+		{"s1+56", func(c *Config) { c.Ingresses[0].AWG.S2 = 66 }, "s1+56"},
 		{"fixed unknown", func(c *Config) {
 			c.Selection.Strategy = StrategyFixed
 			c.Selection.Fixed = "nope"
@@ -69,6 +69,17 @@ func TestValidate(t *testing.T) {
 			c.Routes = []Route{{Name: "g", Egress: "home", Domains: []string{"*.Google.de"}}}
 		}, "invalid domain"},
 		{"route empty", func(c *Config) { c.Routes = []Route{{Name: "g", Egress: "home"}} }, "no domains"},
+		{"no ingress", func(c *Config) { c.Ingresses = nil }, "ingress"},
+		{"dup ingress port", func(c *Config) {
+			c.Ingresses = append(c.Ingresses, Ingress{Name: "b", Interface: "awg1", ListenPort: c.Ingresses[0].ListenPort})
+		}, "port"},
+		{"dup ingress iface", func(c *Config) {
+			c.Ingresses = append(c.Ingresses, Ingress{Name: "b", Interface: "awg0", ListenPort: 1})
+		}, "interface"},
+		{"bad ingress iface", func(c *Config) { c.Ingresses[0].Interface = "eth0" }, "interface"},
+		{"client unknown ingress", func(c *Config) {
+			c.Clients = []Client{{Name: "a", Address: netip.MustParseAddr("10.8.0.2"), PublicKey: "k", Ingress: "nope"}}
+		}, "ingress"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -127,5 +138,43 @@ func TestStoreUpdateRejectsInvalid(t *testing.T) {
 	}
 	if _, err := Open(path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMigrateLegacyServer(t *testing.T) {
+	old := `server:
+  endpoint: 203.0.113.1
+  private_key: x
+  interface: awg0
+  listen_port: 51900
+  awg: {jc: 4, jmin: 40, jmax: 200, s1: 10, s2: 20, h1: "1-2", h2: "3-4", h3: "5-6", h4: "7-8"}
+clients:
+  - name: phone
+    address: 10.8.0.2
+    public_key: k
+`
+	c, err := Parse([]byte(old))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Ingresses) != 1 {
+		t.Fatalf("ingresses: %+v", c.Ingresses)
+	}
+	in := c.Ingresses[0]
+	if in.Name != DefaultIngress || in.Interface != "awg0" || in.ListenPort != 51900 || in.AWG.Jc != 4 || in.AWG.H4 != "7-8" {
+		t.Fatalf("migrated ingress: %+v", in)
+	}
+	if c.Clients[0].Ingress != DefaultIngress || c.ClientIngress(c.Clients[0]).ListenPort != 51900 {
+		t.Fatalf("client ingress: %+v", c.Clients[0])
+	}
+	if c.Server.LegacyListenPort != 0 || c.Server.LegacyInterface != "" {
+		t.Fatal("legacy fields kept")
+	}
+	out, err := c.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "listen_port: 51900\n  awg") || !strings.Contains(string(out), "ingresses:") {
+		t.Fatalf("not written in the new form:\n%s", out)
 	}
 }

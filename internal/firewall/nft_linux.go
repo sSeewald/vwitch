@@ -53,7 +53,10 @@ func Apply(rules []Rule) error {
 
 // Exprs compiles a rule to nftables expressions. inet is true for rules in
 // the inet table, where IPv4 header matches need an nfproto guard.
-func Exprs(r Rule, inet bool) ([]expr.Any, error) {
+func Exprs(r Rule, inet bool) ([]expr.Any, error) { return exprs(r, inet, nil) }
+
+// exprs also resolves set references to the sets created in the same batch.
+func exprs(r Rule, inet bool, sets map[string]*nftables.Set) ([]expr.Any, error) {
 	var e []expr.Any
 	cmp := func(op expr.CmpOp, data []byte) {
 		e = append(e, &expr.Cmp{Op: op, Register: 1, Data: data})
@@ -72,9 +75,13 @@ func Exprs(r Rule, inet bool) ([]expr.Any, error) {
 		meta(expr.MetaKeyOIFNAME)
 		cmp(expr.CmpOpEq, ifname(r.OIF))
 	}
-	if r.OIFNot != "" {
+	for _, i := range r.OIFNot {
 		meta(expr.MetaKeyOIFNAME)
-		cmp(expr.CmpOpNeq, ifname(r.OIFNot))
+		cmp(expr.CmpOpNeq, ifname(i))
+	}
+	for _, i := range r.IIFNot {
+		meta(expr.MetaKeyIIFNAME)
+		cmp(expr.CmpOpNeq, ifname(i))
 	}
 	if r.Saddr.IsValid() {
 		if inet {
@@ -92,6 +99,15 @@ func Exprs(r Rule, inet bool) ([]expr.Any, error) {
 		a := r.Saddr.Masked().Addr().As4()
 		cmp(expr.CmpOpEq, a[:])
 	}
+	if r.Daddr.IsValid() {
+		if inet {
+			meta(expr.MetaKeyNFPROTO)
+			cmp(expr.CmpOpEq, []byte{unix.NFPROTO_IPV4})
+		}
+		e = append(e, &expr.Payload{DestRegister: 1, Base: expr.PayloadBaseNetworkHeader, Offset: 16, Len: 4})
+		a := r.Daddr.As4()
+		cmp(expr.CmpOpEq, a[:])
+	}
 	if r.CtEstablished {
 		e = append(e,
 			&expr.Ct{Register: 1, Key: expr.CtKeySTATE},
@@ -99,6 +115,32 @@ func Exprs(r Rule, inet bool) ([]expr.Any, error) {
 				Mask: binaryutil.NativeEndian.PutUint32(expr.CtStateBitESTABLISHED | expr.CtStateBitRELATED),
 				Xor:  make([]byte, 4)})
 		cmp(expr.CmpOpNeq, make([]byte, 4))
+	}
+	if r.CtNew {
+		e = append(e,
+			&expr.Ct{Register: 1, Key: expr.CtKeySTATE},
+			&expr.Bitwise{SourceRegister: 1, DestRegister: 1, Len: 4,
+				Mask: binaryutil.NativeEndian.PutUint32(expr.CtStateBitNEW), Xor: make([]byte, 4)})
+		cmp(expr.CmpOpNeq, make([]byte, 4))
+	}
+	if s := r.Set; s != nil {
+		proto, off, n := byte(unix.NFPROTO_IPV4), uint32(12), uint32(4)
+		if s.IPv6 {
+			proto, off, n = unix.NFPROTO_IPV6, 8, 16
+		}
+		if s.Dst {
+			off += n
+		}
+		if inet {
+			meta(expr.MetaKeyNFPROTO)
+			cmp(expr.CmpOpEq, []byte{proto})
+		}
+		e = append(e, &expr.Payload{DestRegister: 1, Base: expr.PayloadBaseNetworkHeader, Offset: off, Len: n})
+		l := &expr.Lookup{SourceRegister: 1, SetName: s.Set, Invert: s.Invert}
+		if set, ok := sets[s.Set]; ok {
+			l.SetID = set.ID
+		}
+		e = append(e, l)
 	}
 	if r.Proto != 0 {
 		meta(expr.MetaKeyL4PROTO)
@@ -116,6 +158,15 @@ func Exprs(r Rule, inet bool) ([]expr.Any, error) {
 		e = append(e, &expr.Verdict{Kind: expr.VerdictDrop})
 	case Masquerade:
 		e = append(e, &expr.Masq{})
+	case Reject:
+		if !inet {
+			return nil, fmt.Errorf("reject is only used in inet tables")
+		}
+		e = append(e, &expr.Reject{Type: unix.NFT_REJECT_ICMPX_UNREACH, Code: unix.NFT_REJECT_ICMPX_ADMIN_PROHIBITED})
+	case Log:
+		e = append(e,
+			&expr.Limit{Type: expr.LimitTypePkts, Rate: logRate, Unit: expr.LimitTimeSecond, Burst: logRate},
+			&expr.Log{Key: 1<<unix.NFTA_LOG_GROUP | 1<<unix.NFTA_LOG_PREFIX, Group: LogGroup, Data: []byte(r.LogPrefix)})
 	case DNAT:
 		if !r.NATAddr.Is4() {
 			return nil, fmt.Errorf("dnat needs an IPv4 address")

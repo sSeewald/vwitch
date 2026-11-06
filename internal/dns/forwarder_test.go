@@ -129,3 +129,58 @@ func TestForwarderLearns(t *testing.T) {
 		t.Fatal("NXDOMAIN must not learn")
 	}
 }
+
+func TestForwarderBlocks(t *testing.T) {
+	var seen []string
+	routed := false
+	f := &Forwarder{
+		Listen: netip.MustParseAddr("10.8.0.1"),
+		Names:  func() []string { return nil },
+		Route:  func(netip.Addr, string) (string, bool) { routed = true; return "", false },
+		Block: func(_ netip.Addr, name string) (string, bool) {
+			return "custom", name == "ads.example"
+		},
+		Seen: func(_ netip.Addr, name, source string) { seen = append(seen, name+"/"+source) },
+		Log:  slog.Default(),
+	}
+	client := netip.MustParseAddr("10.8.0.2")
+	h, ans := parse(t, f.handle(context.Background(), query(t, "ADS.example.", dnsmessage.TypeA), client, "udp"))
+	if h.RCode != dnsmessage.RCodeSuccess || len(ans) != 1 || ans[0].Body.(*dnsmessage.AResource).A != [4]byte{} {
+		t.Fatalf("blocked A: %v %v", h, ans)
+	}
+	if h, ans := parse(t, f.handle(context.Background(), query(t, "ads.example.", dnsmessage.TypeAAAA), client, "udp")); h.RCode != dnsmessage.RCodeSuccess || len(ans) != 0 {
+		t.Fatal("blocked AAAA must be empty")
+	}
+	if routed {
+		t.Fatal("a blocked name must not be forwarded")
+	}
+	f.handle(context.Background(), query(t, "ok.example.", dnsmessage.TypeA), client, "udp")
+	if len(seen) != 2 || seen[0] != "ads.example/custom" || seen[1] != "ok.example/" {
+		t.Fatalf("seen %v (only A lookups count)", seen)
+	}
+}
+
+func TestForwarderDropsRebinding(t *testing.T) {
+	learned := false
+	f := &Forwarder{
+		Listen:   netip.MustParseAddr("10.8.0.1"),
+		Upstream: fakeUpstream(t),
+		Names:    func() []string { return nil },
+		Route:    func(netip.Addr, string) (string, bool) { return "", true },
+		Learn:    func(string, []netip.Addr, time.Duration) { learned = true },
+		Timeout:  time.Second,
+		Log:      slog.Default(),
+	}
+	client := netip.MustParseAddr("10.8.0.2")
+	// the upstream answer (192.0.2.1, .2) points into the protected net
+	f.Protect = netip.MustParsePrefix("192.0.2.0/30")
+	h, ans := parse(t, f.handle(context.Background(), query(t, "google.de.", dnsmessage.TypeA), client, "udp"))
+	if h.RCode != dnsmessage.RCodeSuccess || len(ans) != 0 || learned {
+		t.Fatalf("rebinding answer passed: %v %v learned=%v", h, ans, learned)
+	}
+	// other addresses, private or not, pass (e.g. a LAN behind an egress)
+	f.Protect = netip.MustParsePrefix("10.8.0.0/24")
+	if _, ans = parse(t, f.handle(context.Background(), query(t, "google.de.", dnsmessage.TypeA), client, "udp")); len(ans) != 3 {
+		t.Fatalf("normal answer: %v", ans)
+	}
+}

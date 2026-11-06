@@ -1,13 +1,14 @@
 {{define "content"}}
 <div hx-ext="sse" sse-connect="/events">
   <div sse-swap="overview">{{template "overview" .}}</div>
+  <section class="card stack chart-card">{{template "traffic-chart" (list .Lang "1h" "" "")}}<a class="small" href="/activity">{{t .Lang "act.more"}}</a></section>
   <h2>{{t .Lang "dash.egresses"}}</h2>
   <div sse-swap="egresses">{{template "egress-cards" .}}</div>
   <h2>{{t .Lang "dash.log"}}</h2>
   <div class="card log" sse-swap="log">{{template "event-log" .}}</div>
 </div>
 <h2>{{t .Lang "sec.title"}}</h2>
-<div hx-get="/security" hx-trigger="load" hx-swap="outerHTML"><div class="card muted small">{{t .Lang "sec.checking"}}</div></div>
+<div hx-get="/security/check" hx-trigger="load" hx-swap="outerHTML"><div class="card muted small">{{t .Lang "sec.checking"}}</div></div>
 {{end}}
 
 {{define "security"}}{{$l := .Lang}}{{$s := .Data}}
@@ -28,7 +29,7 @@
     {{range $s.PublicAdmin}}<p class="alert">{{t $l "sec.public_admin" .}}</p>{{end}}
     <p class="small"><b>{{t $l "sec.advice"}}</b></p>
     <ul class="advice small">
-      <li>{{t $l "sec.advice.firewall" $s.ListenPort}}</li>
+      <li>{{t $l "sec.advice.firewall" .Data.ListenPorts}}</li>
       <li>{{t $l "sec.advice.overlay"}}</li>
       <li>{{t $l "sec.advice.cert"}}</li>
     </ul>

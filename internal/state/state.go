@@ -63,6 +63,9 @@ func Open(dir string) (*Store, error) {
 	return s, nil
 }
 
+// Dir is the state directory (for other runtime files).
+func (s *Store) Dir() string { return filepath.Dir(s.path) }
+
 // Switches returns a copy of the switches.
 func (s *Store) Switches() Switches {
 	s.mu.Lock()

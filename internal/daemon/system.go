@@ -10,6 +10,7 @@ import (
 	"github.com/sseewald/vwitch/internal/exposure"
 	"github.com/sseewald/vwitch/internal/firewall"
 	"github.com/sseewald/vwitch/internal/ingress"
+	"github.com/sseewald/vwitch/internal/nflog"
 	"github.com/sseewald/vwitch/internal/routing"
 )
 
@@ -18,9 +19,11 @@ import (
 type System interface {
 	Prepare() error // sysctl etc.
 
+	// IngressUp creates or updates the ingress interface spec.Name.
 	IngressUp(ingress.Spec) error
-	SyncPeers([]ingress.Peer) error
-	PeerStats() (map[string]ingress.PeerStats, error)
+	IngressDown(iface string) error
+	SyncPeers(iface string, peers []ingress.Peer) error
+	PeerStats() (map[string]ingress.PeerStats, error) // of all ingresses
 
 	SyncEgresses([]egress.Spec) error
 	EgressStats(iface string) (egress.Stats, error)
@@ -29,6 +32,9 @@ type System interface {
 	ApplyRouting(routing.Plan) error
 	FlushConntrack([]netip.Addr) error
 	ApplyFirewall([]firewall.Rule) error
+	ApplyBlock([]firewall.Set, []firewall.Rule) error
+	// ListenBlocked delivers logged block hits until ctx ends.
+	ListenBlocked(ctx context.Context, fn func(nflog.Hit)) error
 
 	InterfaceUp(name string) bool
 	InterfaceAddrs(name string) []netip.Addr
