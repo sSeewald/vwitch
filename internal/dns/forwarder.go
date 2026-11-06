@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,13 @@ type Route func(client netip.Addr, name string) (iface string, ok bool)
 // so routing can follow the name (domain routes). ttl is the lowest TTL.
 type Learn func(name string, addrs []netip.Addr, ttl time.Duration)
 
+// Block reports whether name is blocked for client, and by which source.
+type Block func(client netip.Addr, name string) (source string, ok bool)
+
+// Seen records an IPv4 lookup (activity list, block log); source is the
+// blocking source or empty when the lookup was answered normally.
+type Seen func(client netip.Addr, name, source string)
+
 // Forwarder answers the local UI names itself and forwards everything else
 // to the public resolver through the asking client's current exit, caching
 // answers per egress.
@@ -32,10 +40,16 @@ type Forwarder struct {
 	Listen   netip.Addr
 	Upstream netip.AddrPort
 	Names    func() []string // local names, e.g. vwitch.internal
-	Route    Route
-	Learn    Learn // optional
-	Timeout  time.Duration
-	Log      *slog.Logger
+	// Protect is the client network. Upstream answers pointing into it are
+	// dropped, so a foreign name cannot be rebound to the server or a client.
+	// Other private ranges stay allowed: names may resolve into an egress LAN.
+	Protect netip.Prefix
+	Route   Route
+	Learn   Learn // optional
+	Block   Block // optional
+	Seen    Seen  // optional
+	Timeout time.Duration
+	Log     *slog.Logger
 
 	once  sync.Once
 	cache *cache
@@ -115,7 +129,20 @@ func (f *Forwarder) handle(ctx context.Context, q []byte, client netip.Addr, net
 		return f.localAnswer(h, question)
 	}
 	name := strings.TrimSuffix(strings.ToLower(question.Name.String()), ".")
-	iface, ok := f.Route(client.Unmap(), name)
+	client = client.Unmap()
+	source, blocked := "", false
+	if f.Block != nil {
+		if source, blocked = f.Block(client, name); !blocked {
+			source = ""
+		}
+	}
+	if f.Seen != nil && question.Type == dnsmessage.TypeA {
+		f.Seen(client, name, source)
+	}
+	if blocked {
+		return blockedAnswer(h, question)
+	}
+	iface, ok := f.Route(client, name)
 	if !ok {
 		return reply(h, question, dnsmessage.RCodeRefused, nil)
 	}
@@ -133,11 +160,14 @@ func (f *Forwarder) handle(ctx context.Context, q []byte, client netip.Addr, net
 		}
 		f.cache.put(k, resp)
 	}
+	addrs, ttl := answerAddrs(resp)
+	if f.Protect.IsValid() && slices.ContainsFunc(addrs, f.Protect.Contains) {
+		f.Log.Info("dns answer into the client network dropped", "client", client, "name", name)
+		return reply(h, question, dnsmessage.RCodeSuccess, nil)
+	}
 	// also on cache hits, so domain routes keep their addresses
-	if f.Learn != nil && question.Type == dnsmessage.TypeA {
-		if addrs, ttl := answerAddrs(resp); len(addrs) > 0 {
-			f.Learn(name, addrs, ttl)
-		}
+	if f.Learn != nil && question.Type == dnsmessage.TypeA && len(addrs) > 0 {
+		f.Learn(name, addrs, ttl)
 	}
 	return resp
 }
@@ -192,6 +222,15 @@ func (f *Forwarder) localAnswer(h dnsmessage.Header, q dnsmessage.Question) []by
 	}
 	a := f.Listen.As4()
 	return reply(h, q, dnsmessage.RCodeSuccess, &dnsmessage.AResource{A: a})
+}
+
+// blockedAnswer answers A with 0.0.0.0 and every other type without data:
+// the client gives up at once instead of retrying like after NXDOMAIN.
+func blockedAnswer(h dnsmessage.Header, q dnsmessage.Question) []byte {
+	if q.Type != dnsmessage.TypeA {
+		return reply(h, q, dnsmessage.RCodeSuccess, nil)
+	}
+	return reply(h, q, dnsmessage.RCodeSuccess, &dnsmessage.AResource{})
 }
 
 func reply(h dnsmessage.Header, q dnsmessage.Question, rc dnsmessage.RCode, a *dnsmessage.AResource) []byte {

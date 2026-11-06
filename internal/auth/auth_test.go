@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -64,5 +67,31 @@ func TestLimiter(t *testing.T) {
 	}
 	if !l.Allowed("a", now.Add(failWindow+time.Second)) {
 		t.Fatal("window")
+	}
+}
+
+func TestSessionsPersist(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	a := NewSessions(time.Hour, 24*time.Hour)
+	if err := a.Persist(path); err != nil {
+		t.Fatal(err)
+	}
+	tok, gone := a.Create(), a.Create()
+	a.Delete(gone)
+	if b, _ := os.ReadFile(path); strings.Contains(string(b), tok) {
+		t.Fatal("token stored in clear")
+	}
+	b := NewSessions(time.Hour, 24*time.Hour) // after a restart
+	if err := b.Persist(path); err != nil {
+		t.Fatal(err)
+	}
+	if !b.Valid(tok) || b.Valid(gone) {
+		t.Fatal("sessions not restored")
+	}
+	b.Clear()
+	c := NewSessions(time.Hour, 24*time.Hour)
+	_ = c.Persist(path)
+	if c.Valid(tok) {
+		t.Fatal("cleared session restored")
 	}
 }

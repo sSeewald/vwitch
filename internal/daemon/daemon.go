@@ -40,9 +40,10 @@ type Daemon struct {
 	egresses  map[string]*egressRuntime
 	decisions map[string]selector.Target // by client name
 	lastFW    string
-	basePlan  routing.Plan  // routing without domain rules, from the last reconcile
-	learned   domains.Cache // addresses learned for domain routes
-	ingSpec   ingress.Spec
+	basePlan  routing.Plan            // routing without domain rules, from the last reconcile
+	learned   domains.Cache           // addresses learned for domain routes
+	ingSpecs  map[string]ingress.Spec // applied, by interface
+	prot      protection
 	status    Status
 	subs      map[chan Status]struct{}
 }
@@ -68,6 +69,8 @@ func New(cfg *config.Store, st *state.Store, sys System, log *slog.Logger) *Daem
 		egresses:  map[string]*egressRuntime{},
 		decisions: map[string]selector.Target{},
 		subs:      map[chan Status]struct{}{},
+		ingSpecs:  map[string]ingress.Spec{},
+		prot:      newProtection(),
 	}
 }
 
@@ -77,9 +80,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return err
 	}
 	c := d.cfg.Get()
-	d.ingSpec = ingress.SpecFromConfig(c)
-	if err := d.sys.IngressUp(d.ingSpec); err != nil {
-		return fmt.Errorf("ingress: %w", err)
+	for _, sp := range ingress.Specs(c) {
+		if err := d.sys.IngressUp(sp); err != nil {
+			return fmt.Errorf("ingress %s: %w", sp.Name, err)
+		}
+		d.ingSpecs[sp.Name] = sp
 	}
 	// Fail-safe first: firewall and the unreachable rule before any peer connects.
 	d.reconcile(ctx)
@@ -88,11 +93,15 @@ func (d *Daemon) Run(ctx context.Context) error {
 		Listen:   c.ServerIP(),
 		Upstream: netip.AddrPortFrom(c.DNS.Resolver, 53),
 		Names:    func() []string { return d.cfg.Get().Web.Hostnames },
+		Protect:  c.Server.Address.Masked(),
 		Route:    d.dnsRoute,
 		Learn:    d.learn,
+		Block:    d.dnsBlock,
+		Seen:     d.dnsSeen,
 		Timeout:  c.Health.Timeout,
 		Log:      d.log,
 	}
+	go d.runProtection(ctx)
 	go func() {
 		if err := fwd.Serve(ctx); err != nil {
 			d.log.Error("dns forwarder stopped", "err", err)
@@ -129,16 +138,7 @@ func (d *Daemon) reconcile(ctx context.Context) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if spec := ingress.SpecFromConfig(c); spec != d.ingSpec {
-		if err := d.sys.IngressUp(spec); err != nil {
-			d.log.Error("ingress update", "err", err)
-		} else {
-			d.ingSpec = spec
-		}
-	}
-	if err := d.sys.SyncPeers(ingress.PeersFromConfig(c, now)); err != nil {
-		d.log.Error("sync peers", "err", err)
-	}
+	d.syncIngresses(c, now)
 
 	// egress interfaces
 	var specs []egress.Spec
@@ -173,7 +173,7 @@ func (d *Daemon) reconcile(ctx context.Context) {
 	next := map[string]selector.Target{}
 	var changed []netip.Addr
 	rp := routing.Plan{ClientNet: c.ClientNet()}
-	fp := firewall.Plan{AWGIface: c.Server.Interface, ServerAddr: c.ServerIP(), ClientNet: c.ClientNet(),
+	fp := firewall.Plan{AWGIfaces: c.IngressIfaces(), Isolated: isolatedIfaces(c), ServerAddr: c.ServerIP(), ClientNet: c.ClientNet(),
 		PortalPort: c.Web.Portal.Port, AdminPort: adminPort(c.Web.Admin.Listen), AdminIfaces: c.Server.AdminInterfaces}
 	for _, e := range c.Egresses {
 		if e.Enabled {
@@ -220,6 +220,7 @@ func (d *Daemon) reconcile(ctx context.Context) {
 			d.lastFW = r
 		}
 	}
+	d.applyProtection(c)
 	d.basePlan = rp
 	d.learned.Forget(func(route string) bool { _, ok := c.Route(route); return ok })
 	d.applyRouting(c, sw.KillSwitch, now)
@@ -227,6 +228,38 @@ func (d *Daemon) reconcile(ctx context.Context) {
 		d.log.Warn("conntrack flush", "err", err)
 	}
 	d.publish(d.buildStatus(c, sw, now))
+}
+
+// syncIngresses converges the ingress interfaces and their peers. Caller
+// holds d.mu.
+func (d *Daemon) syncIngresses(c *config.Config, now time.Time) {
+	want := map[string]bool{}
+	for _, sp := range ingress.Specs(c) {
+		want[sp.Name] = true
+		if old, ok := d.ingSpecs[sp.Name]; !ok || old != sp {
+			if err := d.sys.IngressUp(sp); err != nil {
+				d.log.Error("ingress update", "iface", sp.Name, "err", err)
+				continue
+			}
+			d.ingSpecs[sp.Name] = sp
+		}
+	}
+	for iface := range d.ingSpecs {
+		if !want[iface] {
+			if err := d.sys.IngressDown(iface); err != nil {
+				d.log.Error("ingress removal", "iface", iface, "err", err)
+			}
+			delete(d.ingSpecs, iface)
+		}
+	}
+	for _, in := range c.Ingresses {
+		if _, up := d.ingSpecs[in.Interface]; !up {
+			continue
+		}
+		if err := d.sys.SyncPeers(in.Interface, ingress.Peers(c, in, now)); err != nil {
+			d.log.Error("sync peers", "iface", in.Interface, "err", err)
+		}
+	}
 }
 
 func (d *Daemon) runtime(name string) *egressRuntime {
@@ -398,8 +431,18 @@ func describe(t selector.Target) string {
 // once one of them (other than lo) is up, so SSH never locks itself out.
 func (d *Daemon) sshLocked(c *config.Config) bool {
 	return c.Server.LockdownSSH && slices.ContainsFunc(c.Server.AdminInterfaces, func(i string) bool {
-		return i != "lo" && i != c.Server.Interface && d.sys.InterfaceUp(i)
+		return i != "lo" && !slices.Contains(c.IngressIfaces(), i) && d.sys.InterfaceUp(i)
 	})
+}
+
+func isolatedIfaces(c *config.Config) []string {
+	var out []string
+	for _, in := range c.Ingresses {
+		if in.Isolated {
+			out = append(out, in.Interface)
+		}
+	}
+	return out
 }
 
 func adminPort(listen string) uint16 {

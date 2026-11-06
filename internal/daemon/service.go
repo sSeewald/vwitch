@@ -140,6 +140,8 @@ type ClientOptions struct {
 	Strategy *config.Strategy `json:"strategy,omitempty"`
 	Fixed    *string          `json:"fixed,omitempty"`
 	I        *[]string        `json:"i,omitempty"`
+	AWG3     *bool            `json:"awg3,omitempty"`
+	Ingress  *string          `json:"ingress,omitempty"`
 }
 
 func (o ClientOptions) apply(cl *config.Client) {
@@ -161,6 +163,12 @@ func (o ClientOptions) apply(cl *config.Client) {
 	if o.I != nil {
 		cl.I = *o.I
 	}
+	if o.AWG3 != nil {
+		cl.AWG3 = *o.AWG3
+	}
+	if o.Ingress != nil {
+		cl.Ingress = *o.Ingress
+	}
 }
 
 // AddClient creates a client and returns its config file. This is the only
@@ -172,6 +180,14 @@ func (d *Daemon) AddClient(name string, o ClientOptions) (string, error) {
 		if err != nil {
 			return err
 		}
+		if o.Ingress != nil {
+			cl.Ingress = *o.Ingress
+		}
+		in, ok := c.Ingress(cl.Ingress)
+		if !ok {
+			return fmt.Errorf("unknown ingress %q", cl.Ingress)
+		}
+		cl.AWG3 = in.AWG.NewClientsAWG3 // the options may still turn it off
 		o.apply(&cl)
 		if out, err = clients.Rekey(c, &cl); err != nil {
 			return err
@@ -397,6 +413,7 @@ func (d *Daemon) Certificate() (*x509.Certificate, error) {
 var SettingKeys = []string{
 	"endpoint", "strategy", "fixed", "offline", "resolver", "allow_direct", "lockdown_ssh",
 	"hostnames", "language", "portal_actions", "admin_interfaces", "admin_user", "admin_listen", "listen_port",
+	"regions.enabled", "regions.mode", "regions.direction", "regions.countries", "activity",
 }
 
 // Set changes one setting from its string form. CLI and admin UI share it.
@@ -481,7 +498,32 @@ func set(c *config.Config, key, value string) error {
 		if err != nil {
 			return err
 		}
-		c.Server.ListenPort = uint16(p)
+		c.Ingresses[0].ListenPort = uint16(p) // the first ingress, as before there were several
+	case "regions.enabled":
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return err
+		}
+		c.Security.Regions.Enabled = b
+	case "regions.mode":
+		c.Security.Regions.Mode = config.RegionMode(value)
+	case "regions.direction":
+		c.Security.Regions.Direction = config.Direction(value)
+	case "regions.countries":
+		var cs []string
+		for _, x := range list(value) {
+			if x = strings.ToUpper(x); !slices.Contains(cs, x) {
+				cs = append(cs, x)
+			}
+		}
+		slices.Sort(cs)
+		c.Security.Regions.Countries = cs
+	case "activity":
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return err
+		}
+		c.Security.NoActivity = !b
 	default:
 		return fmt.Errorf("unknown setting %q (known: %s)", key, strings.Join(SettingKeys, ", "))
 	}

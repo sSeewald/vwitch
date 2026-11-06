@@ -5,12 +5,14 @@
     <li class="row">
       <div>
         <h3><a href="/clients/{{.Name}}">{{.Name}}</a></h3>
-        <p class="muted small mono">{{.Address}}{{if .Expires}} · {{t $l "client.expires"}} {{.Expires.Format "02.01.2006"}}{{end}}</p>
+        <p class="muted small mono">{{.Address}}{{if .Expires}} · {{t $l "client.expires"}} {{(lastDay .Expires).Format "02.01.2006"}}{{end}}</p>
       </div>
       <span class="spacer"></span>
       {{if not .Active}}<span class="pill">{{t $l "client.inactive"}}</span>
       {{else if .Online}}<span class="pill ok">{{t $l "client.online"}}</span>
       {{else}}<span class="pill">{{t $l "client.offline"}}</span>{{end}}
+      {{if gt (len $.Data.Config.Ingresses) 1}}<span class="pill in">{{.Ingress}}</span>{{end}}
+      {{template "pinned" (withLang $l .)}}
       <span class="pill">{{exitLabel $l .Exit .Egress}}</span>
     </li>
   {{else}}
@@ -23,6 +25,11 @@
 <form class="card stack" method="post" action="/clients">
   <div class="field"><label for="cname">{{t $l "name"}}</label><input id="cname" name="name" required pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,31}"></div>
   <div class="field"><label for="cexp">{{t $l "client.expires"}}</label><input id="cexp" name="expires" type="date"><p class="hint">{{t $l "client.expires.hint"}}</p></div>
+  {{$first := index .Data.Config.Ingresses 0}}
+  {{if gt (len .Data.Config.Ingresses) 1}}<div class="field"><label for="cin">{{t $l "client.ingress"}}</label>
+    <select id="cin" name="ingress" data-ingress>{{range .Data.Config.Ingresses}}<option value="{{.Name}}" data-awg3="{{.AWG.NewClientsAWG3}}" data-strict="{{.AWG.Strict}}">{{.Name}} · UDP {{.ListenPort}}</option>{{end}}</select>
+    <p class="hint">{{t $l "client.ingress.hint"}}</p></div>{{end}}
+  <label class="check" data-awg3 {{if $first.AWG.Strict}}hidden{{end}}><span>{{t $l "client.awg3"}}<span class="hint">{{t $l "client.awg3.hint"}}</span></span><input class="switch" type="checkbox" name="awg3" value="true" {{if $first.AWG.NewClientsAWG3}}checked{{end}}></label>
   <button>{{t $l "client.add"}}</button>
 </form>
 {{end}}

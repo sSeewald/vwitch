@@ -5,6 +5,7 @@ package config
 
 import (
 	"net/netip"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -55,6 +56,7 @@ const (
 // Config is the root of vwitch.yaml.
 type Config struct {
 	Server    Server    `yaml:"server"`
+	Ingresses []Ingress `yaml:"ingresses"`
 	DNS       DNS       `yaml:"dns"`
 	Selection Selection `yaml:"selection"`
 	Health    Health    `yaml:"health"`
@@ -62,18 +64,22 @@ type Config struct {
 	Egresses  []Egress  `yaml:"egresses"`
 	Clients   []Client  `yaml:"clients"`
 	Routes    []Route   `yaml:"routes,omitempty"`
+	Security  Security  `yaml:"security,omitempty"`
 }
 
-// Server describes the AmneziaWG ingress.
+// Server holds what all ingresses share: endpoint, client network, MTU and
+// the server key.
 type Server struct {
 	// Endpoint is the public host or IP clients connect to.
 	Endpoint   string       `yaml:"endpoint"`
-	Interface  string       `yaml:"interface"`
-	ListenPort uint16       `yaml:"listen_port"`
 	Address    netip.Prefix `yaml:"address"` // server IP + client network, e.g. 10.8.0.1/24
 	MTU        int          `yaml:"mtu"`
 	PrivateKey string       `yaml:"private_key"`
-	AWG        AWGParams    `yaml:"awg"`
+	// The single ingress of configs before ingresses existed. It is moved to
+	// the first ingress when the config is loaded and never written again.
+	LegacyInterface  string    `yaml:"interface,omitempty"`
+	LegacyListenPort uint16    `yaml:"listen_port,omitempty"`
+	LegacyAWG        AWGParams `yaml:"awg,omitempty"`
 	// AllowDirect permits the VPS's own uplink as exit (fast switch, offline policy direct/ask).
 	AllowDirect bool `yaml:"allow_direct"`
 	// AdminInterfaces may reach the admin UI and, with LockdownSSH, SSH.
@@ -82,7 +88,7 @@ type Server struct {
 	LockdownSSH bool `yaml:"lockdown_ssh"`
 }
 
-// AWGParams are the AmneziaWG 2.0 obfuscation parameters shared by server and clients.
+// AWGParams are the AmneziaWG obfuscation parameters shared by server and clients.
 type AWGParams struct {
 	Jc   int    `yaml:"jc"`
 	Jmin int    `yaml:"jmin"`
@@ -95,7 +101,21 @@ type AWGParams struct {
 	H2   string `yaml:"h2"`
 	H3   string `yaml:"h3"`
 	H4   string `yaml:"h4"`
+
+	// AmneziaWG 3.1. Without a header protection key, clients without
+	// AWG 3.1 support keep working.
+	DisableCookies bool   `yaml:"disable_cookies,omitempty"` // never send cookie replies (server only)
+	ContentPadding string `yaml:"content_padding,omitempty"` // random padding range "lo-hi" for transport data
+	// HeaderProtectionKey (base64) encrypts the packet headers. Every client
+	// must know it, so clients without AWG 3.1 can no longer connect.
+	HeaderProtectionKey string `yaml:"header_protection_key,omitempty"`
+	RandomTrailers      bool   `yaml:"random_trailers,omitempty"` // random bytes after each packet; needs AWG 3.1 on both sides
+	// NewClientsAWG3 is the default of Client.AWG3 for new clients.
+	NewClientsAWG3 bool `yaml:"new_clients_awg3,omitempty"`
 }
+
+// Strict reports whether only AWG 3.1 clients can connect.
+func (p AWGParams) Strict() bool { return p.HeaderProtectionKey != "" || p.RandomTrailers }
 
 // DNS configures the resolver forced on clients.
 type DNS struct {
@@ -183,10 +203,27 @@ type Egress struct {
 	Targets         []Target      `yaml:"targets,omitempty"`
 }
 
+// Ingress is one AmneziaWG entry point: its own interface, UDP port and
+// camouflage parameters. All ingresses share the client network, the server
+// address and the server key; each client connects through one of them.
+type Ingress struct {
+	Name       string    `yaml:"name"`
+	Interface  string    `yaml:"interface"`
+	ListenPort uint16    `yaml:"listen_port"`
+	AWG        AWGParams `yaml:"awg"`
+	// Isolated clients reach their egress, DNS and the portal, but no other
+	// client, and no other client reaches them.
+	Isolated bool `yaml:"isolated,omitempty"`
+}
+
+// IngressIfacePrefix starts every ingress interface name (awg0, awg1, ...).
+const IngressIfacePrefix = "awg"
+
 // Client is an AmneziaWG peer connecting to the server.
 type Client struct {
 	Name         string     `yaml:"name"`
 	Enabled      bool       `yaml:"enabled"`
+	Ingress      string     `yaml:"ingress"` // the ingress the client connects through
 	Address      netip.Addr `yaml:"address"`
 	PublicKey    string     `yaml:"public_key"`       // the private key is shown once and never stored
 	Issued       string     `yaml:"issued,omitempty"` // fingerprint of the config the client received
@@ -197,6 +234,9 @@ type Client struct {
 	Fixed    string   `yaml:"fixed,omitempty"`
 	// Optional AWG 2.0 I1–I5 packets; some clients do not support them.
 	I []string `yaml:"i,omitempty"`
+	// AWG3 adds the AWG 3.1 lines to the client config. Clients without
+	// AWG 3.1 support reject unknown lines, so this is opt-in per client.
+	AWG3 bool `yaml:"awg3,omitempty"`
 }
 
 // Active reports whether the client may connect at time now.
@@ -237,6 +277,44 @@ func (c *Config) ServerIP() netip.Addr { return c.Server.Address.Addr() }
 
 // ClientNet is the client network prefix.
 func (c *Config) ClientNet() netip.Prefix { return c.Server.Address.Masked() }
+
+// Ingress returns the ingress with the given name.
+func (c *Config) Ingress(name string) (*Ingress, bool) {
+	for i := range c.Ingresses {
+		if c.Ingresses[i].Name == name {
+			return &c.Ingresses[i], true
+		}
+	}
+	return nil, false
+}
+
+// ClientIngress returns the ingress a client connects through (the first
+// one if its ingress is unknown, which validation rejects).
+func (c *Config) ClientIngress(cl Client) *Ingress {
+	if in, ok := c.Ingress(cl.Ingress); ok {
+		return in
+	}
+	return &c.Ingresses[0]
+}
+
+// IngressIfaces returns the interface names of all ingresses.
+func (c *Config) IngressIfaces() []string {
+	out := make([]string, len(c.Ingresses))
+	for i, in := range c.Ingresses {
+		out[i] = in.Interface
+	}
+	return out
+}
+
+// NextIngressIface returns the lowest unused ingress interface name.
+func (c *Config) NextIngressIface() string {
+	for n := 0; ; n++ {
+		name := IngressIfacePrefix + strconv.Itoa(n)
+		if !slices.Contains(c.IngressIfaces(), name) {
+			return name
+		}
+	}
+}
 
 // Egress returns the egress with the given name.
 func (c *Config) Egress(name string) (*Egress, bool) {

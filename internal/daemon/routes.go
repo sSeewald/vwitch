@@ -215,3 +215,42 @@ func (d *Daemon) RemoveRoute(name string) error {
 	}
 	return err
 }
+
+// RouteDomain sends one domain through an egress: it joins the first route
+// of that egress (or a new route named after it) and leaves any other route.
+// A route left without domains is removed.
+func (d *Daemon) RouteDomain(domain, egress string) error {
+	dom, err := domains.Normalize(domain)
+	if err != nil {
+		return err
+	}
+	var target string
+	err = d.update(func(c *config.Config) error {
+		if _, ok := c.Egress(egress); !ok {
+			return fmt.Errorf("unknown egress %q", egress)
+		}
+		for i := range c.Routes {
+			c.Routes[i].Domains = slices.DeleteFunc(c.Routes[i].Domains, func(x string) bool { return x == dom })
+		}
+		c.Routes = slices.DeleteFunc(c.Routes, func(r config.Route) bool { return len(r.Domains) == 0 })
+		for i := range c.Routes {
+			if r := &c.Routes[i]; r.Egress == egress {
+				r.Domains = append(r.Domains, dom)
+				slices.Sort(r.Domains)
+				target = r.Name
+				return nil
+			}
+		}
+		target = egress
+		if _, taken := c.Route(target); taken {
+			return fmt.Errorf("route %q exists for another egress", target)
+		}
+		c.Routes = append(c.Routes, config.Route{Name: target, Egress: egress, Domains: []string{dom}})
+		slices.SortFunc(c.Routes, func(a, b config.Route) int { return cmp.Compare(a.Name, b.Name) })
+		return nil
+	})
+	if err == nil {
+		d.event("route_changed", target, egress)
+	}
+	return err
+}

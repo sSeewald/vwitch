@@ -1,0 +1,63 @@
+{{define "content"}}{{$l := .Lang}}{{$d := .Data}}
+<section class="card stack">
+  {{template "traffic-chart" (list $l $d.Range $d.Client "nav")}}
+</section>
+
+<h2>{{t $l "act.clients"}}</h2>
+<ul class="card rows clients-traffic">
+{{range $d.Totals}}{{$on := eq .Name $d.Client}}
+  <li><a class="crow{{if $on}} on{{end}}" href="/activity?range={{$d.Range}}{{if not $on}}&client={{.Name}}{{end}}" {{if $on}}aria-current="true"{{end}}>
+    <span class="crow-name"><b>{{.Name}}</b><span class="muted small">{{if gt (len $d.Config.Ingresses) 1}}{{.Ingress}} · {{end}}{{printf "%.0f" .Share}} %</span></span>
+    <span class="spark" data-chart data-mini data-src="/traffic" data-range="{{$d.Range}}" data-client="{{.Name}}"></span>
+    <span class="crow-bytes mono small"><span>↓ {{bytes .Bytes.Down}}</span><span class="muted">↑ {{bytes .Bytes.Up}}</span></span>
+  </a></li>
+{{else}}
+  <li class="muted">{{t $l "act.no_clients"}}</li>
+{{end}}
+  <li class="crow total"><span class="crow-name"><b>{{t $l "act.total"}}</b></span><span></span>
+    <span class="crow-bytes mono small"><span>↓ {{bytes $d.Sum.Down}}</span><span class="muted">↑ {{bytes $d.Sum.Up}}</span></span></li>
+</ul>
+
+<h2>{{t $l "act.domains"}}</h2>
+{{if $d.Disabled}}
+<p class="card muted">{{t $l "act.domains.off"}} <a href="/settings">{{t $l "nav.settings"}}</a></p>
+{{else}}
+<div class="card domains-card">
+  <form class="filters" method="get" action="/activity">
+    <input type="hidden" name="range" value="{{$d.Range}}">
+    <input type="search" name="q" value="{{$d.Query}}" placeholder="{{t $l "act.search"}}" aria-label="{{t $l "act.search"}}" autocapitalize="none" spellcheck="false">
+    <select name="client" aria-label="{{t $l "act.client"}}" data-autosubmit><option value="">{{t $l "act.all_clients"}}</option>{{range $d.Config.Clients}}<option {{if eq .Name $d.Client}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+  </form>
+  <ul class="rows domains">
+  {{range $d.Domains}}{{$blocked := index $d.Blocked .Domain}}{{$via := index $d.RouteOf .Domain}}{{$dom := .Domain}}
+    <li class="drow{{if $blocked}} blocked{{end}}">
+      <div class="drow-main">
+        <div class="drow-head"><b class="mono">{{.Domain}}</b>
+          {{if $blocked}}<span class="tag bad">{{t $l "act.blocked"}}</span>{{end}}
+          {{with $via}}<span class="tag ok">→ {{.}}</span>{{end}}</div>
+        <p class="muted small">{{t $l "act.queries" .Queries}}{{if .Blocked}} · {{t $l "act.queries_blocked" .Blocked}}{{end}} · {{join .Clients ", "}} · {{.Last.Format "15:04"}}</p>
+      </div>
+      <details class="menu">
+        <summary class="icon" aria-label="{{t $l "act.actions"}}" title="{{t $l "act.actions"}}">⋯</summary>
+        <div class="menu-pop">
+          {{with .Names}}<p class="mono muted small names">{{join . " · "}}</p>{{end}}
+          <form method="post" action="/activity/block" data-no-guard>
+            <input type="hidden" name="domain" value="{{$dom}}"><input type="hidden" name="back" value="{{$d.Back}}">
+            <input type="hidden" name="on" value="{{not $blocked}}">
+            <button class="menu-item{{if not $blocked}} bad{{end}}">{{if $blocked}}{{t $l "act.unblock"}}{{else}}{{t $l "act.block"}}{{end}}</button>
+          </form>
+          {{if $d.Config.Egresses}}<p class="menu-label">{{t $l "act.route"}}</p>
+          {{range $d.Config.Egresses}}<form method="post" action="/activity/route" data-no-guard>
+            <input type="hidden" name="domain" value="{{$dom}}"><input type="hidden" name="back" value="{{$d.Back}}"><input type="hidden" name="egress" value="{{.Name}}">
+            <button class="menu-item" {{if eq .Name $via}}aria-current="true" disabled{{end}}>{{.Name}}{{if eq .Name $via}} ✓{{end}}</button>
+          </form>{{end}}{{end}}
+        </div>
+      </details>
+    </li>
+  {{else}}
+    <li class="muted">{{t $l "act.domains.empty"}}</li>
+  {{end}}
+  </ul>
+</div>
+{{end}}
+{{end}}

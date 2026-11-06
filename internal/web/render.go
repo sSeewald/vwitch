@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/sseewald/vwitch/internal/certs"
 	"github.com/sseewald/vwitch/internal/config"
@@ -31,6 +32,7 @@ type Page struct {
 	Center bool // centered brand + card, preferences in the footer (login)
 	Nav    []NavItem
 	Error  string
+	Saved  bool // show the "saved" confirmation
 	Data   any
 }
 
@@ -43,9 +45,12 @@ type Renderer struct {
 }
 
 var funcs = template.FuncMap{
-	"t":           i18n.T,
-	"list":        func(v ...string) []string { return v },
-	"inc":         func(i int) int { return i + 1 },
+	"t":        i18n.T,
+	"list":     func(v ...string) []string { return v },
+	"withLang": func(lang string, v any) []any { return []any{lang, v} }, // a value plus the language for a define
+	"inc":      func(i int) int { return i + 1 },
+	// lastDay is the last valid day of an expiry stored as the following midnight
+	"lastDay":     func(t *time.Time) time.Time { return t.Add(-time.Nanosecond) },
 	"version":     version.String,
 	"repoURL":     func() string { return version.RepoURL },
 	"selfSigned":  certs.IsSelfSigned,
@@ -86,15 +91,8 @@ var funcs = template.FuncMap{
 		}
 		return fmt.Sprintf("%.0f h", sec/3600)
 	},
-	"rate": func(bps float64) string {
-		units := []string{"B", "kB", "MB", "GB"}
-		i := 0
-		for bps >= 1000 && i < len(units)-1 {
-			bps /= 1000
-			i++
-		}
-		return fmt.Sprintf("%.0f %s", bps, units[i])
-	},
+	"rate":  amount,
+	"bytes": func(n int64) string { return amount(float64(n)) },
 	"exitLabel": func(lang, exit, egress string) string {
 		if exit == "" {
 			return i18n.T(lang, "exit.none")
@@ -112,6 +110,8 @@ var funcs = template.FuncMap{
 	},
 	// route is the client's "connection" choice for the select
 	"hasPrefix": strings.HasPrefix,
+	"flag":      flag,
+	"country":   func(lang, code string) string { return country(lang, code).Name },
 	"route": func(c daemon.ClientStatus) string {
 		switch {
 		case c.Fast:
@@ -130,6 +130,20 @@ var funcs = template.FuncMap{
 		}
 		return i18n.T(lang, "reason."+code)
 	},
+}
+
+// amount formats a number of bytes (or bytes per second) with a unit.
+func amount(v float64) string {
+	units := []string{"B", "kB", "MB", "GB", "TB"}
+	i := 0
+	for v >= 1000 && i < len(units)-1 {
+		v /= 1000
+		i++
+	}
+	if i > 0 && v < 10 {
+		return fmt.Sprintf("%.1f %s", v, units[i])
+	}
+	return fmt.Sprintf("%.0f %s", v, units[i])
 }
 
 // NewRenderer parses layout + each page.

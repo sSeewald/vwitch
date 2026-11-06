@@ -1,0 +1,68 @@
+{{define "content"}}{{$l := .Lang}}{{$d := .Data}}{{$r := $d.Config.Security.Regions}}
+<form class="card stack" method="post" action="/security/regions">
+  <label class="check"><span><b>{{t $l "block.regions"}}</b><span class="hint">{{t $l "block.regions.hint"}}</span></span>
+    <input class="switch" type="checkbox" name="enabled" value="true" {{if $r.Enabled}}checked{{end}}></label>
+
+  <div class="seg-radio" role="radiogroup" aria-label="{{t $l "block.regions.mode"}}">
+    {{range $o := list "block" "allow"}}<label><input type="radio" name="mode" value="{{$o}}" {{if eq $o (print $r.Mode)}}checked{{end}}><span>{{t $l (print "block.mode." $o)}}</span></label>{{end}}
+  </div>
+
+  <fieldset class="field">
+    <legend>{{t $l "block.direction"}}</legend>
+    <div class="radios">
+    {{range $o := list "both" "outgoing" "incoming"}}<label class="radio"><input type="radio" name="direction" value="{{$o}}" {{if eq $o (print $r.Direction)}}checked{{end}}><span>{{t $l (print "block.direction." $o)}}</span></label>{{end}}
+    </div>
+  </fieldset>
+
+  <div class="field">
+    <label for="cadd">{{t $l "block.countries"}}</label>
+    <p class="chips">{{range $d.Selected}}<label class="chip pick"><input type="checkbox" name="countries" value="{{.Code}}" checked><span>{{.Flag}} {{.Name}}</span></label>{{else}}<span class="muted small">{{t $l "block.countries.none"}}</span>{{end}}</p>
+    <select id="cadd" name="countries">
+      <option value="">{{t $l "block.countries.add"}}</option>
+      {{range $d.Countries}}<option value="{{.Code}}">{{.Flag}} {{.Name}}</option>{{end}}
+    </select>
+    <p class="hint">{{t $l "block.countries.hint"}}</p>
+  </div>
+
+  {{if and (eq (print $r.Mode) "allow") (ne (print $r.Direction) "outgoing")}}<p class="alert">{{t $l "block.allow_incoming"}}</p>{{end}}
+  {{with $d.Geo}}
+  <p class="hint">{{if .Busy}}{{t $l "block.geo.busy"}}{{else if .Ranges}}{{t $l "block.geo.ok" .Ranges (.Updated.Format "02.01.2006")}}{{else if $r.Active}}{{t $l "block.geo.pending"}}{{end}}
+    {{if .Error}}<br><span class="bad">{{t $l "block.geo.error" .Error}}</span>{{end}}</p>
+  {{end}}
+  <button>{{t $l "save"}}</button>
+</form>
+
+<h2>{{t $l "block.domains"}}</h2>
+<form class="card stack" method="post" action="/security/domains">
+  <p class="hint">{{t $l "block.domains.hint"}}</p>
+  {{with $d.Config.Security.BlockedDomains}}<p class="chips">{{range .}}<label class="chip pick mono"><input type="checkbox" name="domains" value="{{.}}" checked><span>{{.}}</span></label>{{end}}</p>{{end}}
+  <div class="field"><label for="dadd">{{t $l "block.domains.add"}}</label>
+    <textarea id="dadd" name="add" rows="2" autocapitalize="none" spellcheck="false" placeholder="example.com"></textarea></div>
+  <button>{{t $l "save"}}</button>
+</form>
+
+<h2>{{t $l "block.log"}}</h2>
+{{template "block-log" .}}
+{{end}}
+
+{{define "block-log"}}{{$l := .Lang}}{{$g := .Data.Log}}
+<div id="block-log" class="card" hx-get="/security/log?log={{$g.Kind}}" hx-trigger="every 10s" hx-swap="outerHTML">
+  <nav class="tabs">
+    {{range $o := list "" "address" "domain"}}<a href="/security?log={{$o}}" {{if eq $o $g.Kind}}aria-current="page"{{end}}>{{t $l (print "block.log.kind." $o)}}</a>{{end}}
+  </nav>
+  {{if $g.Events}}
+  <div class="table-wrap"><table class="list blocklog">
+    <thead><tr><th>{{t $l "block.log.time"}}</th><th></th><th>{{t $l "block.log.target"}}</th><th>{{t $l "block.log.client"}}</th><th>{{t $l "block.log.source"}}</th></tr></thead>
+    <tbody>
+    {{range $g.Events}}<tr>
+      <td class="mono nowrap when">{{.Time.Format "02.01. 15:04:05"}}</td>
+      <td class="kind" title="{{if .Domain}}DNS{{else if .Incoming}}{{t $l "block.direction.incoming"}}{{else}}{{t $l "block.direction.outgoing"}}{{end}}">{{if .Domain}}<span class="dir">DNS</span>{{else if .Incoming}}<span class="dir in">↓</span>{{else}}<span class="dir out">↑</span>{{end}}</td>
+      <td class="target">{{if .Domain}}<span class="mono">{{.Domain}}</span>{{else}}{{with .Country}}<span title="{{country $l .}}">{{flag .}}</span> {{end}}<span class="mono">{{.Addr}}{{if .Port}}:{{.Port}}{{end}}</span>{{with .Proto}} <span class="muted small">{{.}}</span>{{end}}{{end}}</td>
+      <td class="who">{{if .Client}}{{.Client}}{{else}}<span class="muted">–</span>{{end}}</td>
+      <td class="muted small rule">{{t $l (print "block.source." .Source)}}</td>
+    </tr>{{end}}
+    </tbody>
+  </table></div>
+  {{else}}<p class="muted">{{t $l "block.log.empty"}}</p>{{end}}
+</div>
+{{end}}

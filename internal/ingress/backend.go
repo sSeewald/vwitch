@@ -46,18 +46,22 @@ type Backend interface {
 	Close() error
 }
 
-// SpecFromConfig derives the interface spec.
-func SpecFromConfig(c *config.Config) Spec {
+// Specs derives one interface spec per ingress.
+func Specs(c *config.Config) []Spec {
 	s := c.Server
-	return Spec{Name: s.Interface, Address: s.Address, ListenPort: s.ListenPort, MTU: s.MTU,
-		PrivateKey: s.PrivateKey, AWG: s.AWG}
+	out := make([]Spec, len(c.Ingresses))
+	for i, in := range c.Ingresses {
+		out[i] = Spec{Name: in.Interface, Address: s.Address, ListenPort: in.ListenPort, MTU: s.MTU,
+			PrivateKey: s.PrivateKey, AWG: in.AWG}
+	}
+	return out
 }
 
-// PeersFromConfig returns the peers of all active clients.
-func PeersFromConfig(c *config.Config, now time.Time) []Peer {
+// Peers returns the active clients of one ingress.
+func Peers(c *config.Config, in config.Ingress, now time.Time) []Peer {
 	var ps []Peer
 	for _, cl := range c.Clients {
-		if cl.Active(now) {
+		if cl.Active(now) && c.ClientIngress(cl).Name == in.Name {
 			ps = append(ps, Peer{PublicKey: cl.PublicKey, PresharedKey: cl.PresharedKey, Addr: cl.Address})
 		}
 	}
@@ -75,6 +79,19 @@ func interfaceUAPI(s Spec) (string, error) {
 	fmt.Fprintf(&b, "private_key=%s\nlisten_port=%d\n", key, s.ListenPort)
 	fmt.Fprintf(&b, "jc=%d\njmin=%d\njmax=%d\ns1=%d\ns2=%d\ns3=%d\ns4=%d\n", a.Jc, a.Jmin, a.Jmax, a.S1, a.S2, a.S3, a.S4)
 	fmt.Fprintf(&b, "h1=%s\nh2=%s\nh3=%s\nh4=%s\n", a.H1, a.H2, a.H3, a.H4)
+	// AWG 3.1: always written, so switching a feature off resets the device
+	hpk := strings.Repeat("0", 64) // all zero: header protection off
+	if a.HeaderProtectionKey != "" {
+		if hpk, err = keyHex(a.HeaderProtectionKey); err != nil {
+			return "", fmt.Errorf("header protection key: %w", err)
+		}
+	}
+	padding := a.ContentPadding
+	if padding == "" {
+		padding = "0" // off
+	}
+	fmt.Fprintf(&b, "header_protection_key=%s\ncontent_padding_addition=%s\nrandom_trailers=%t\ndisable_cookies=%t\n",
+		hpk, padding, a.RandomTrailers, a.DisableCookies)
 	return b.String(), nil
 }
 

@@ -36,6 +36,7 @@ type Vars struct {
 	AllowDirect          bool
 	LockdownSSH          bool
 	Language             string
+	AdminPasswordHash    string // bcrypt; empty: generate a password on the server
 	NetBirdSetupKey      string
 	NetBirdManagementURL string
 	Egresses             []Egress
@@ -43,15 +44,19 @@ type Vars struct {
 
 // InstallArgs renders the install.sh options.
 func (v Vars) InstallArgs() string {
-	args := []string{"--version", v.Version, "--password-file", "/root/vwitch-admin-password"}
-	if v.Version == "latest" {
-		args = args[2:]
+	var args []string
+	if v.Version != "latest" {
+		args = append(args, "--version", v.Version)
+	}
+	if v.AdminPasswordHash == "" {
+		args = append(args, "--password-file", "/root/vwitch-admin-password")
 	}
 	add := func(flag, val string) {
 		if val != "" {
 			args = append(args, flag, shellQuote(val))
 		}
 	}
+	add("--admin-password-hash", v.AdminPasswordHash)
 	add("--endpoint", v.Endpoint)
 	if v.ListenPort != 0 {
 		add("--listen-port", fmt.Sprint(v.ListenPort))

@@ -7,6 +7,7 @@ package firewall
 import (
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 )
 
@@ -34,6 +35,8 @@ const (
 	Drop       Verdict = "drop"
 	DNAT       Verdict = "dnat"
 	Masquerade Verdict = "masquerade"
+	Reject     Verdict = "reject"
+	Log        Verdict = "log" // rate limited nflog, the rule continues
 )
 
 // IP protocol numbers.
@@ -45,7 +48,8 @@ const (
 
 // Plan is the input for rule generation.
 type Plan struct {
-	AWGIface      string
+	AWGIfaces     []string // every ingress interface
+	Isolated      []string // ingress interfaces whose clients reach no other client
 	ServerAddr    netip.Addr
 	ClientNet     netip.Prefix
 	PortalPort    uint16
@@ -62,12 +66,17 @@ type Rule struct {
 	Chain         Chain
 	IPv6          bool // match IPv6 packets only
 	IIF, OIF      string
-	OIFNot        string
+	OIFNot        []string
+	IIFNot        []string
 	Saddr         netip.Prefix
+	Daddr         netip.Addr // a single destination address
 	Proto         uint8
 	DPort         uint16
 	CtEstablished bool
+	CtNew         bool
+	Set           *SetMatch
 	Verdict       Verdict
+	LogPrefix     string
 	NATAddr       netip.Addr
 	NATPort       uint16
 }
@@ -76,62 +85,95 @@ type Rule struct {
 func (p Plan) Rules() []Rule {
 	var rs []Rule
 	add := func(r Rule) { rs = append(rs, r) }
-	awg := p.AWGIface
+	ings := p.AWGIfaces
+	each := func(fn func(awg string)) {
+		for _, a := range ings {
+			fn(a)
+		}
+	}
 
 	// input: admin port (and SSH with lockdown) only on admin interfaces;
-	// these come first so awg0 can be an admin interface if configured
-	p.restrictPort(add, p.AdminPort, "")
+	// these come first so an ingress can be an admin interface if configured
+	p.restrictPort(add, p.AdminPort, nil)
 	if p.LockdownSSH {
-		p.restrictPort(add, 22, awg) // SSH never via the VPN ingress
+		p.restrictPort(add, 22, ings) // SSH never via a VPN ingress
 	}
 	// clients may only reach the portal and DNS (and ping the server)
-	add(Rule{Chain: ChainInput, IIF: awg, CtEstablished: true, Verdict: Accept})
-	add(Rule{Chain: ChainInput, IIF: awg, Proto: ProtoTCP, DPort: p.PortalPort, Verdict: Accept})
-	for _, proto := range []uint8{ProtoUDP, ProtoTCP} {
-		add(Rule{Chain: ChainInput, IIF: awg, Proto: proto, DPort: 53, Verdict: Accept})
+	each(func(awg string) {
+		add(Rule{Chain: ChainInput, IIF: awg, CtEstablished: true, Verdict: Accept})
+		add(Rule{Chain: ChainInput, IIF: awg, Proto: ProtoTCP, DPort: p.PortalPort, Verdict: Accept})
+		for _, proto := range []uint8{ProtoUDP, ProtoTCP} {
+			add(Rule{Chain: ChainInput, IIF: awg, Proto: proto, DPort: 53, Verdict: Accept})
+		}
+		add(Rule{Chain: ChainInput, IIF: awg, Proto: ProtoICMP, Verdict: Accept})
+		add(Rule{Chain: ChainInput, IIF: awg, Verdict: Drop})
+	})
+	// the portal and DNS on the server address serve only the tunnel: the
+	// host accepts packets for any local address on any interface, so a
+	// neighbour that routes the client net to the server must not reach them
+	local := append(slices.Clone(ings), "lo")
+	for _, pp := range []struct {
+		proto uint8
+		port  uint16
+	}{{ProtoTCP, p.PortalPort}, {ProtoUDP, 53}, {ProtoTCP, 53}} {
+		add(Rule{Chain: ChainInput, IIFNot: local, Daddr: p.ServerAddr, Proto: pp.proto, DPort: pp.port, Verdict: Drop})
 	}
-	add(Rule{Chain: ChainInput, IIF: awg, Proto: ProtoICMP, Verdict: Accept})
-	add(Rule{Chain: ChainInput, IIF: awg, Verdict: Drop})
 
-	// forward: client traffic leaves only through allowed exits
-	add(Rule{Chain: ChainForward, IIF: awg, IPv6: true, Verdict: Drop})
-	add(Rule{Chain: ChainForward, OIF: awg, CtEstablished: true, Verdict: Accept})
-	add(Rule{Chain: ChainForward, IIF: awg, OIF: awg, Verdict: Accept})
-	for _, e := range p.EgressIfaces {
-		add(Rule{Chain: ChainForward, IIF: awg, OIF: e, Verdict: Accept})
-	}
-	for _, c := range p.DirectClients {
-		add(Rule{Chain: ChainForward, IIF: awg, Saddr: host(c), Verdict: Accept})
-	}
-	add(Rule{Chain: ChainForward, IIF: awg, Verdict: Drop})
-	add(Rule{Chain: ChainForward, OIF: awg, Verdict: Drop})
+	// forward: client traffic leaves only through allowed exits; clients
+	// reach each other only between ingresses that are not isolated
+	each(func(awg string) { add(Rule{Chain: ChainForward, IIF: awg, IPv6: true, Verdict: Drop}) })
+	each(func(awg string) { add(Rule{Chain: ChainForward, OIF: awg, CtEstablished: true, Verdict: Accept}) })
+	each(func(from string) {
+		for _, to := range ings {
+			if !slices.Contains(p.Isolated, from) && !slices.Contains(p.Isolated, to) {
+				add(Rule{Chain: ChainForward, IIF: from, OIF: to, Verdict: Accept})
+			}
+		}
+	})
+	each(func(awg string) {
+		for _, e := range p.EgressIfaces {
+			add(Rule{Chain: ChainForward, IIF: awg, OIF: e, Verdict: Accept})
+		}
+	})
+	each(func(awg string) {
+		for _, c := range p.DirectClients {
+			add(Rule{Chain: ChainForward, IIF: awg, Saddr: host(c), OIFNot: ings, Verdict: Accept})
+		}
+	})
+	each(func(awg string) { add(Rule{Chain: ChainForward, IIF: awg, Verdict: Drop}) })
+	each(func(awg string) { add(Rule{Chain: ChainForward, OIF: awg, Verdict: Drop}) })
 
 	// nat: all client DNS goes to vwitch's forwarder, offline HTTP to the
 	// portal; masquerade everything leaving
-	for _, proto := range []uint8{ProtoUDP, ProtoTCP} {
-		add(Rule{Chain: ChainPrerouting, IIF: awg, Proto: proto, DPort: 53, Verdict: DNAT, NATAddr: p.ServerAddr})
-	}
-	for _, c := range p.PortalClients {
-		add(Rule{Chain: ChainPrerouting, IIF: awg, Saddr: host(c), Proto: ProtoTCP, DPort: 80,
-			Verdict: DNAT, NATAddr: p.ServerAddr, NATPort: p.PortalPort})
-	}
-	add(Rule{Chain: ChainPostrouting, Saddr: p.ClientNet, OIFNot: awg, Verdict: Masquerade})
+	each(func(awg string) {
+		for _, proto := range []uint8{ProtoUDP, ProtoTCP} {
+			add(Rule{Chain: ChainPrerouting, IIF: awg, Proto: proto, DPort: 53, Verdict: DNAT, NATAddr: p.ServerAddr})
+		}
+		for _, c := range p.PortalClients {
+			add(Rule{Chain: ChainPrerouting, IIF: awg, Saddr: host(c), Proto: ProtoTCP, DPort: 80,
+				Verdict: DNAT, NATAddr: p.ServerAddr, NATPort: p.PortalPort})
+		}
+	})
+	add(Rule{Chain: ChainPostrouting, Saddr: p.ClientNet, OIFNot: ings, Verdict: Masquerade})
 	return rs
 }
 
 // restrictPort allows tcp port only on admin interfaces, except skip.
-func (p Plan) restrictPort(add func(Rule), port uint16, skip string) {
+func (p Plan) restrictPort(add func(Rule), port uint16, skip []string) {
 	if port == 0 {
 		return
 	}
 	for _, i := range p.AdminIfaces {
-		if i == skip {
+		if slices.Contains(skip, i) {
 			continue
 		}
 		add(Rule{Chain: ChainInput, IIF: i, Proto: ProtoTCP, DPort: port, Verdict: Accept})
 	}
 	add(Rule{Chain: ChainInput, Proto: ProtoTCP, DPort: port, Verdict: Drop})
 }
+
+// logRate limits logged block hits per rule (packets per second).
+const logRate = 20
 
 func host(a netip.Addr) netip.Prefix { return netip.PrefixFrom(a, 32) }
 
@@ -155,8 +197,11 @@ func (r Rule) String() string {
 	if r.OIF != "" {
 		parts = append(parts, fmt.Sprintf("oifname %q", r.OIF))
 	}
-	if r.OIFNot != "" {
-		parts = append(parts, fmt.Sprintf("oifname != %q", r.OIFNot))
+	for _, i := range r.OIFNot {
+		parts = append(parts, fmt.Sprintf("oifname != %q", i))
+	}
+	for _, i := range r.IIFNot {
+		parts = append(parts, fmt.Sprintf("iifname != %q", i))
 	}
 	if r.Saddr.IsValid() {
 		if r.Saddr.IsSingleIP() {
@@ -165,8 +210,27 @@ func (r Rule) String() string {
 			parts = append(parts, "ip saddr "+r.Saddr.String())
 		}
 	}
+	if r.Daddr.IsValid() {
+		parts = append(parts, "ip daddr "+r.Daddr.String())
+	}
 	if r.CtEstablished {
 		parts = append(parts, "ct state established,related")
+	}
+	if r.CtNew {
+		parts = append(parts, "ct state new")
+	}
+	if s := r.Set; s != nil {
+		fam, dir, op := "ip", "saddr", ""
+		if s.IPv6 {
+			fam = "ip6"
+		}
+		if s.Dst {
+			dir = "daddr"
+		}
+		if s.Invert {
+			op = "!= "
+		}
+		parts = append(parts, fmt.Sprintf("%s %s %s@%s", fam, dir, op, s.Set))
 	}
 	switch {
 	case r.DPort != 0:
@@ -181,6 +245,8 @@ func (r Rule) String() string {
 			to = fmt.Sprintf("%s:%d", to, r.NATPort)
 		}
 		parts = append(parts, "dnat to "+to)
+	case Log:
+		parts = append(parts, fmt.Sprintf("limit rate %d/second log prefix %q group %d", logRate, r.LogPrefix, LogGroup))
 	default:
 		parts = append(parts, string(r.Verdict))
 	}

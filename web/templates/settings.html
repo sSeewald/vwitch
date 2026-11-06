@@ -22,6 +22,7 @@
       {{end}}
       <p class="hint">{{t $l "settings.portal_actions.hint"}}</p>
     </fieldset>
+    <label class="check"><span>{{t $l "settings.activity"}}<span class="hint">{{t $l "settings.activity.hint"}}</span></span><input class="switch" type="checkbox" name="activity" value="true" {{if not $c.Security.NoActivity}}checked{{end}}></label>
     <div class="field"><label for="s11">{{t $l "settings.language"}}</label>
       <select id="s11" name="language">{{range $.Langs}}<option value="{{.}}" {{if eq . $c.Web.Language}}selected{{end}}>{{t $l (print "lang." .)}}</option>{{end}}</select>
       <p class="hint">{{t $l "settings.language.hint"}}</p></div>

@@ -53,3 +53,15 @@ func TestRenderRejects(t *testing.T) {
 		t.Fatal(out)
 	}
 }
+
+func TestAdminPasswordHash(t *testing.T) {
+	v := Vars{Version: "latest", AdminPasswordHash: "$2a$10$abcdefghijklmnopqrstuuJ0123456789abcdefghijklmnopqrstu"}
+	args := v.InstallArgs()
+	if !strings.Contains(args, "--admin-password-hash '$2a$10$") || strings.Contains(args, "--password-file") {
+		t.Fatalf("hash must be single-quoted and replace the password file: %s", args)
+	}
+	out, err := Render(v)
+	if err != nil || !strings.Contains(out, "Admin password: as chosen") {
+		t.Fatal(err)
+	}
+}
