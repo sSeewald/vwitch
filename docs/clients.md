@@ -17,7 +17,7 @@ no egress works* applies). A client with its own strategy shows the name of
 that strategy instead. Clients without a pin follow the strategy from the
 [settings](settings.md).
 
-The small shield next to each name shows the client's
+The small shield before each name shows the client's
 [camouflage level](#camouflage-level) with one to three bars. It is coloured
 while the client is online and grey otherwise; hover it to see the level.
 
