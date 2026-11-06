@@ -144,7 +144,7 @@ SRC=$(ip netns exec client curl -s --max-time 3 http://198.51.100.7/ || true)
 [ -z "$SRC" ] && ok "kill switch beats the domain route" || bad "kill switch leaked via route: '$SRC'"
 vwitch killswitch off
 vwitch route rm lab
-check "route rule removed" sh -c '! ip rule | grep -q "^75:"'
+wait_for sh -c '! ip rule | grep -q "^75:"' && ok "route rule removed" || bad "route rule removed"
 vwitch fast off
 wait_for sh -c 'vwitch status | grep -q "phone.*home"' || bad "back to home"
 
