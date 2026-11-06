@@ -1,11 +1,15 @@
-// Package auth protects the admin UI: bcrypt password hashes and in-memory
+// Package auth protects the admin UI: bcrypt password hashes and server-side
 // sessions with a sliding expiry.
 package auth
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"os"
 	"sync"
 	"time"
 
@@ -36,24 +40,69 @@ func RandomToken(n int) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-// Sessions is an in-memory session store with opaque random tokens (no JWT:
-// one server, so server-side sessions are simpler and revocable). Sessions
-// end after Idle without use, after Max at the latest, on logout, on a
-// password change and on restart; nothing secret is persisted.
+// Sessions is a session store with opaque random tokens (no JWT: one
+// server, so server-side sessions are simpler and revocable). Sessions end
+// after Idle without use, after Max at the latest, on logout and on a
+// password change. With Persist they survive restarts; only SHA-256 hashes
+// of the tokens are written, so the file never contains a usable token.
 type Sessions struct {
 	Idle time.Duration
 	Max  time.Duration
 	now  func() time.Time
 
-	mu   sync.Mutex
-	data map[string]session
+	mu    sync.Mutex
+	data  map[string]session // by token hash
+	path  string
+	saved time.Time
 }
 
-type session struct{ created, expires time.Time }
+type session struct {
+	Created time.Time `json:"created"`
+	Expires time.Time `json:"expires"`
+}
 
-// NewSessions creates a store.
+// saveEvery limits writes caused by sliding expiry.
+const saveEvery = time.Minute
+
+// NewSessions creates an in-memory store.
 func NewSessions(idle, max time.Duration) *Sessions {
 	return &Sessions{Idle: idle, Max: max, now: time.Now, data: map[string]session{}}
+}
+
+// Persist loads sessions from path and keeps the file up to date.
+func (s *Sessions) Persist(path string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.path = path
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, &s.data)
+}
+
+// save writes the store. Caller holds s.mu.
+func (s *Sessions) save(now time.Time) {
+	if s.path == "" {
+		return
+	}
+	s.saved = now
+	b, err := json.Marshal(s.data)
+	if err != nil {
+		return
+	}
+	tmp := s.path + ".tmp"
+	if os.WriteFile(tmp, b, 0o600) == nil {
+		_ = os.Rename(tmp, s.path)
+	}
+}
+
+func hashToken(t string) string {
+	h := sha256.Sum256([]byte(t))
+	return hex.EncodeToString(h[:])
 }
 
 // Create starts a session and returns its token. A new token is issued on
@@ -64,11 +113,12 @@ func (s *Sessions) Create() string {
 	defer s.mu.Unlock()
 	now := s.now()
 	for k, v := range s.data { // drop expired sessions
-		if now.After(v.expires) {
+		if now.After(v.Expires) {
 			delete(s.data, k)
 		}
 	}
-	s.data[t] = session{created: now, expires: s.expiry(now, now)}
+	s.data[hashToken(t)] = session{Created: now, Expires: s.expiry(now, now)}
+	s.save(now)
 	return t
 }
 
@@ -76,16 +126,26 @@ func (s *Sessions) Create() string {
 func (s *Sessions) Valid(token string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	v, ok := s.data[token]
+	k := hashToken(token)
+	v, ok := s.data[k]
 	now := s.now()
-	if !ok || now.After(v.expires) {
-		delete(s.data, token)
+	if !ok || now.After(v.Expires) {
+		if ok {
+			delete(s.data, k)
+			s.save(now)
+		}
 		return false
 	}
-	v.expires = s.expiry(v.created, now)
-	s.data[token] = v
+	v.Expires = s.expiry(v.Created, now)
+	s.data[k] = v
+	if now.Sub(s.saved) >= saveEvery {
+		s.save(now)
+	}
 	return true
 }
+
+// Lifetime is how long a fresh session cookie may live in the browser.
+func (s *Sessions) Lifetime() time.Duration { return s.Max }
 
 func (s *Sessions) expiry(created, now time.Time) time.Time {
 	if idle, hard := now.Add(s.Idle), created.Add(s.Max); idle.Before(hard) {
@@ -98,7 +158,8 @@ func (s *Sessions) expiry(created, now time.Time) time.Time {
 func (s *Sessions) Delete(token string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.data, token)
+	delete(s.data, hashToken(token))
+	s.save(s.now())
 }
 
 // Clear ends all sessions (after a password change).
@@ -106,6 +167,7 @@ func (s *Sessions) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	clear(s.data)
+	s.save(s.now())
 }
 
 // Limiter slows down password guessing per remote address.

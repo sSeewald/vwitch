@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -41,10 +42,23 @@ type Admin struct {
 }
 
 // NewAdmin creates the admin UI.
-func NewAdmin(d *daemon.Daemon, r *Renderer, log *slog.Logger) *Admin {
-	return &Admin{d: d, r: r, log: log, sessions: auth.NewSessions(2*time.Hour, 24*time.Hour), limiter: auth.NewLimiter(),
+// Sessions persist in stateDir (empty: memory only).
+func NewAdmin(d *daemon.Daemon, r *Renderer, log *slog.Logger, stateDir string) *Admin {
+	s := auth.NewSessions(sessionIdle, sessionMax)
+	if stateDir != "" {
+		if err := s.Persist(filepath.Join(stateDir, "sessions.json")); err != nil {
+			log.Warn("admin sessions not restored", "err", err)
+		}
+	}
+	return &Admin{d: d, r: r, log: log, sessions: s, limiter: auth.NewLimiter(),
 		lastHash: d.Config().Web.Admin.PasswordHash}
 }
+
+// A session ends after a week without use, after 30 days at the latest.
+const (
+	sessionIdle = 7 * 24 * time.Hour
+	sessionMax  = 30 * 24 * time.Hour
+)
 
 var nav = []NavItem{
 	{"/", "nav.dashboard"}, {"/egresses", "nav.egresses"}, {"/clients", "nav.clients"}, {"/routes", "nav.routes"},
@@ -275,7 +289,7 @@ func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: a.sessions.Create(), Path: "/", HttpOnly: true,
-		Secure: true, SameSite: http.SameSiteStrictMode})
+		MaxAge: int(a.sessions.Lifetime().Seconds()), Secure: true, SameSite: http.SameSiteStrictMode})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

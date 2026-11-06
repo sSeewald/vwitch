@@ -79,7 +79,7 @@ func serveCmd(g *globals) *cobra.Command {
 			eg, ctx := errgroup.WithContext(ctx)
 			eg.Go(func() error { return d.Run(ctx) })
 			eg.Go(func() error { return portal.New(d, r, log).Serve(ctx) })
-			eg.Go(func() error { return web.NewAdmin(d, r, log).Serve(ctx) })
+			eg.Go(func() error { return web.NewAdmin(d, r, log, stateDir).Serve(ctx) })
 			eg.Go(func() error {
 				go func() { <-ctx.Done(); _ = apiSrv.Close() }()
 				if err := apiSrv.Serve(ln); err != http.ErrServerClosed {
