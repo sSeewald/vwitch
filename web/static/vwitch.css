@@ -458,6 +458,8 @@ button.menu-item:disabled { opacity: 1; color: var(--ok); font-weight: 700; }
 .camo rect { fill: currentColor; opacity: .22; }
 .camo rect.on { opacity: 1; }
 .camo.idle { color: var(--muted); }
+.camo.idle rect { opacity: .15; }
+.camo.idle rect.on { fill: var(--text); opacity: .75; }
 h3.with-camo { display: inline-flex; align-items: center; gap: 8px; }
 .camo-info { display: flex; gap: 14px; align-items: flex-start; padding-top: 12px; border-top: 1px solid var(--line); }
 .camo-big .camo { width: 34px; height: 38px; }
