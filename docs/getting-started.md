@@ -88,7 +88,9 @@ ssh -L 8443:127.0.0.1:443 root@<your-server>
 Open **https://127.0.0.1:8443** and sign in as `admin` with the password from
 step 1. Your browser warns about a self-signed certificate. That is expected:
 compare the SHA-256 fingerprint with the one vwitch logs
-(`journalctl -u vwitch | grep sha256`) and accept it.
+(`journalctl -u vwitch | grep sha256`) and accept it. This also works in
+Safari on iPhone, iPad and Mac (choose *Show Details* and *visit this
+website*).
 
 ![Sign-in page](images/login.png)
 

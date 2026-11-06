@@ -20,10 +20,12 @@ import (
 // Organization marks certificates vwitch generated itself.
 const Organization = "vwitch self-signed"
 
-// Validity stays below the 825 days Apple platforms accept for TLS server
-// certificates; Renew regenerates well before expiry.
+// Validity is the span from NotBefore to NotAfter. Apple platforms reject a
+// TLS server certificate whose span exceeds 825 days (398 for publicly
+// trusted ones) without any way to continue, so it stays below both; Renew
+// regenerates well before expiry.
 const (
-	Validity = 825 * 24 * time.Hour
+	Validity = 397 * 24 * time.Hour
 	Renew    = 30 * 24 * time.Hour
 )
 
@@ -42,7 +44,7 @@ func SelfSigned(names []string, now time.Time) (certPEM, keyPEM []byte, err erro
 		SerialNumber:          serial,
 		Subject:               pkix.Name{CommonName: first(names), Organization: []string{Organization}},
 		NotBefore:             now.Add(-time.Hour),
-		NotAfter:              now.Add(Validity),
+		NotAfter:              now.Add(-time.Hour).Add(Validity),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
@@ -71,6 +73,10 @@ func SelfSigned(names []string, now time.Time) (certPEM, keyPEM []byte, err erro
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
 		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: kder}), nil
 }
+
+// TooLong reports whether c's validity span exceeds Validity; older vwitch
+// versions generated such certificates.
+func TooLong(c *x509.Certificate) bool { return c.NotAfter.Sub(c.NotBefore) > Validity }
 
 // IsSelfSigned reports whether vwitch generated c.
 func IsSelfSigned(c *x509.Certificate) bool {

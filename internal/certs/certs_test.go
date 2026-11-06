@@ -27,7 +27,8 @@ func TestSelfSigned(t *testing.T) {
 	if err := cert.VerifyHostname("v.witch"); err != nil {
 		t.Fatal(err)
 	}
-	if got := cert.NotAfter.Sub(now); got > Validity {
+	// Apple counts from NotBefore, not from now
+	if got := cert.NotAfter.Sub(cert.NotBefore); got > Validity || got > 398*24*time.Hour || TooLong(cert) {
 		t.Fatalf("validity %v", got)
 	}
 	if fp := Fingerprint(cert); len(fp) != 95 {

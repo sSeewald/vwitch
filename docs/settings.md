@@ -68,7 +68,9 @@ vwitch admin passwd
 The admin page is HTTPS only. Without your own certificate, vwitch uses a
 **self-signed** one, renews it automatically and shows its names, expiry date
 and **SHA-256** fingerprint here. Compare that fingerprint with the browser's
-before accepting the warning.
+before accepting the warning. The certificate is valid for 397 days at most,
+the limit Safari on iPhone, iPad and Mac accepts; vwitch renews it before it
+expires and replaces older, longer-lived ones on start.
 
 To use your own certificate, upload the certificate (with the intermediate
 chain) and the private key as files, or paste them as PEM text, then
