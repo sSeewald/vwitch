@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.1](https://github.com/sSeewald/vwitch/compare/v1.2.0...v1.2.1) (2026-11-06)
+
+
+### Features
+
+* admin UI access as a switch per ingress ([7f54eb4](https://github.com/sSeewald/vwitch/commit/7f54eb4a45b09b042ec30de922c6c20cae4d2469))
+* show blocked lookups and connections as red bars in the traffic charts, overall and per client ([7f54eb4](https://github.com/sSeewald/vwitch/commit/7f54eb4a45b09b042ec30de922c6c20cae4d2469))
+
+
+### Bug Fixes
+
+* name and reset connections blocked by the country filter ([#9](https://github.com/sSeewald/vwitch/issues/9)) ([7f54eb4](https://github.com/sSeewald/vwitch/commit/7f54eb4a45b09b042ec30de922c6c20cae4d2469))
+
 ## [1.2.0](https://github.com/sSeewald/vwitch/compare/v1.1.1...v1.2.0) (2026-11-06)
 
 
