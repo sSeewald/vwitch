@@ -17,6 +17,10 @@ no egress works* applies). A client with its own strategy shows the name of
 that strategy instead. Clients without a pin follow the strategy from the
 [settings](settings.md).
 
+The small shield next to each name shows the client's
+[camouflage level](#camouflage-level) with one to three bars. It is coloured
+while the client is online and grey otherwise; hover it to see the level.
+
 ## Add a client
 
 Under **Add client**:
@@ -52,7 +56,8 @@ Click a client to open its page:
 ![Client page](images/client.png)
 
 - **Top**: where its traffic goes right now and why (for example *First
-  working egress in the order*).
+  working egress in the order*), and its
+  [camouflage level](#camouflage-level).
 - **Traffic**: its download and upload over time, with its blocked lookups
   and connections as red bars. *Domains and details* opens
   [Activity](activity.md) filtered to this client.
@@ -67,6 +72,30 @@ Click a client to open its page:
 - **Valid until**: change or remove the expiry date.
 - **Block traffic**: a kill switch for this client only. It overrides the
   connection choice.
+
+## Camouflage level
+
+Each client has a camouflage level from 1 to 3. It tells you how hard the
+client's traffic is to recognise as a VPN for networks that try to block VPNs.
+The client page shows it with a large shield, the level name, a short
+explanation and a tip for reaching the next level.
+
+| Level | Name | What the client's traffic looks like | How to get there |
+| --- | --- | --- | --- |
+| 1 | **Basic** | Junk packets before the handshake, padded handshakes and header values of its own. Common WireGuard filters do not recognise it. | Every client has at least this. |
+| 2 | **Padding** | Like *Basic*, plus a random length for every data packet, so packet sizes give nothing away. | Turn on **AmneziaWG 3.1** for the client, with **Random padding** on its [ingress](ingresses.md#change-an-ingress). Needs a new config. |
+| 3 | **Header protection** | Like *Padding*, plus encrypted headers and random trailers: no fixed byte pattern is left. The strongest level. | Move the client to an *AWG 3.1 only* [ingress](ingresses.md#camouflage), if its app supports it. Needs a new config. |
+
+The level comes from the config vwitch issued to the client, not from
+watching its traffic. So:
+
+- If the device still uses an **older config**, the page warns that the shown
+  level applies only once the new config is imported.
+- If the device is **offline**, the page notes that the level is taken from
+  its config.
+
+Scripts find the level in `vwitch status --json` as the field `camouflage`
+(1–3) of each client.
 
 ## Configuration: lost or outdated
 
