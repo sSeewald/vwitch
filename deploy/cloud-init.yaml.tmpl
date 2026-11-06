@@ -33,4 +33,4 @@ runcmd:
   - vwitch egress add {{.Name}} /root/vwitch-egress/{{.Name}}.conf{{if .Resolve}} --resolve {{.Resolve}}{{end}} && rm -f /root/vwitch-egress/{{.Name}}.conf
 {{- end}}
   - vwitch doctor || true
-final_message: "vwitch installed. Admin password: /root/vwitch-admin-password. Add clients with: vwitch client add <name> --qr"
+final_message: "vwitch installed. Admin password: {{if .AdminPasswordHash}}as chosen{{else}}/root/vwitch-admin-password{{end}}. Add clients with: vwitch client add <name> --qr"

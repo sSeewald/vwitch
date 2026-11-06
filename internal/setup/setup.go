@@ -4,6 +4,7 @@ package setup
 
 import (
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"net"
 	"net/netip"
@@ -28,6 +29,7 @@ type Options struct {
 	Language        string
 	Username        string // empty: config.DefaultAdminUser
 	Password        string // empty: generate one
+	PasswordHash    string // bcrypt hash instead of a password (cloud-init keeps no clear text)
 }
 
 // NewConfig returns a ready configuration and the admin password in clear.
@@ -61,11 +63,19 @@ func NewConfig(o Options) (*config.Config, string, error) {
 		c.Web.Admin.Username = o.Username
 	}
 	pw := o.Password
-	if pw == "" {
-		pw = Password()
-	}
-	if c.Web.Admin.PasswordHash, err = auth.HashPassword(pw); err != nil {
-		return nil, "", err
+	switch {
+	case o.PasswordHash != "":
+		if !auth.ValidHash(o.PasswordHash) {
+			return nil, "", errors.New("admin password hash is not a bcrypt hash")
+		}
+		c.Web.Admin.PasswordHash, pw = o.PasswordHash, ""
+	default:
+		if pw == "" {
+			pw = Password()
+		}
+		if c.Web.Admin.PasswordHash, err = auth.HashPassword(pw); err != nil {
+			return nil, "", err
+		}
 	}
 	if o.AllowDirect {
 		c.Selection.Offline = config.OfflineAsk

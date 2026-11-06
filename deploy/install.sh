@@ -14,6 +14,7 @@
 #   --lockdown-ssh           allow SSH only on admin interfaces once they are up
 #   --language de|en         default UI language
 #   --password-file PATH     where to store the generated admin password
+#   --admin-password-hash H  bcrypt hash of the admin password (instead of a generated one)
 #   --no-start               install and configure, but do not start
 set -eu
 
@@ -30,7 +31,7 @@ while [ $# -gt 0 ]; do
     --version) VERSION="${2#v}"; shift 2 ;;
     --no-start) START=0; shift ;;
     --allow-direct|--lockdown-ssh) SETUP_ARGS="$SETUP_ARGS $1"; shift ;;
-    --endpoint|--listen-port|--address|--resolver|--admin-interfaces|--language|--password-file)
+    --endpoint|--listen-port|--address|--resolver|--admin-interfaces|--language|--password-file|--admin-password-hash)
       [ $# -ge 2 ] || die "$1 needs a value"
       SETUP_ARGS="$SETUP_ARGS $1 $2"; shift 2 ;;
     *) die "unknown option $1" ;;

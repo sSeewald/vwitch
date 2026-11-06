@@ -28,6 +28,12 @@ func HashPassword(pw string) (string, error) {
 	return string(h), err
 }
 
+// ValidHash reports whether h is a bcrypt hash.
+func ValidHash(h string) bool {
+	_, err := bcrypt.Cost([]byte(h))
+	return err == nil
+}
+
 // CheckPassword compares a password with a hash in constant time.
 func CheckPassword(hash, pw string) bool {
 	return hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), []byte(pw)) == nil
