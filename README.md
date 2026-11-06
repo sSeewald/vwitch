@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>The egress switch for your AmneziaWG relay.</b><br>
-  Clients connect to one server. vwitch decides where their traffic leaves the internet.
+  Clients connect to one server. vwitch decides which egress their traffic leaves through.
 </p>
 
 <p align="center">
@@ -22,18 +22,29 @@
 ---
 
 vwitch turns a VPS into an [AmneziaWG](https://docs.amnezia.org/) relay with
-several egresses. Clients connect to the obfuscated ingress `awg0`. vwitch forwards
-their traffic through one of your **WireGuard egress tunnels**. An egress can be
+several egresses. Clients connect to an obfuscated **ingress** (`awg0`, and more
+if you add them). vwitch forwards their traffic through one of your **WireGuard
+egress tunnels**. An egress can be
 any standard WireGuard peer: a home router, a gateway or another server. As an
 option, traffic can also leave through the VPS's own uplink. vwitch watches every
 egress and switches automatically when one fails. It never leaks traffic it isn't
-allowed to send.
+allowed to send. What clients reach is whatever the egress offers: its LAN,
+the internet through it, or both.
 
 ```
- phone ─┐                      ┌── vwe0 ─ WireGuard ─▶ home router  ─▶ internet
- laptop ┼─ AmneziaWG ─▶ vwitch ┼── vwe1 ─ WireGuard ─▶ office gw    ─▶ internet
- tablet ┘    (awg0)            └── eth0 (optional direct egress)   ─▶ internet
+ phone  ─┐   ingresses              egresses
+ laptop ─┼─▶ awg0 ─┐          ┌── vwe0 ─ WireGuard ─▶ home router ─▶ its network
+ tablet ─┘         ├─ vwitch ─┼── vwe1 ─ WireGuard ─▶ office gw   ─▶ its network
+ guest  ───▶ awg1 ─┘          └── eth0 (optional direct egress)  ─▶ VPS uplink
 ```
+
+## Documentation
+
+New to vwitch? Start with **[Getting started](docs/getting-started.md)**: what
+vwitch does, installation, and your first egress and client, step by step with
+screenshots. Every page of the admin UI has its own guide (overview,
+ingresses, egresses, clients, routes, activity, blocking, settings and the
+client page), all listed in **[docs/](docs/README.md)**.
 
 ## Features
 
@@ -41,12 +52,16 @@ allowed to send.
 - **Fail-safe by design.** Policy routing ends in a fixed `unreachable` rule and forward policy is drop. A missing egress blocks traffic instead of leaking it.
 - **Offline behavior.** When no egress is healthy, vwitch can `block` traffic, show an `ask` page to the user, or fall back to `direct`. It returns to an egress automatically once one recovers.
 - **Domain routes.** Send domains such as `google.de` or `netflix.com` (with all subdomains) through a fixed egress, grouped into named routes, configurable in the UI or CLI. Duplicates across routes are rejected.
+- **Domain and country blocking.** Block domains (with all subdomains) for every client, and block or allow whole countries by their registered address ranges, for outgoing, incoming or both directions. A block log shows every hit with time, client, address, country and direction.
+- **Activity.** A traffic graph over the last hour, day, week or month, overall and per client, and the list of domains clients looked up during the last 24 hours, each with one-tap Block and Route via.
+- **Several ingresses.** Run more than one AmneziaWG entry point (`awg0`, `awg1`, …), each with its own UDP port and camouflage. Mark one as strict (AWG 3.1 only) or isolated (its clients reach no other client). Every client picks its ingress.
+- **AmneziaWG 3.1 camouflage.** Encrypted padding and no cookie replies; AWG 3.1 configs by default per ingress, switchable per client; an optional strict mode with header protection and random trailers.
 - **Kill switch and direct mode.** Global or per client, available from the UI and the CLI.
 - **Server-enforced DNS.** Client configs use vwitch itself (`10.8.0.1`) as DNS server. vwitch answers its own names, caches answers per egress, and forwards the rest to a public resolver through the client's own egress. Queries to any other resolver are redirected too. No IPv6 leaks.
-- **Local UI names.** `v.witch` and `vwitch.internal` work like `fritz.box`, and the names are configurable.
+- **Local UI names.** `v.witch` and `vwitch.internal` work like a router's local admin name, and the names are configurable.
 - **Web UI.**
   - A client view is reachable only from inside the tunnel.
-  - An admin view at **https://v.witch** for every VPN client, HTTPS only, with username and password. Which interfaces may reach it is configurable (default `lo` and `awg0`; add NetBird `wt0` for access without the VPN). SSH is never opened to VPN clients.
+  - An admin view at **https://v.witch** for every VPN client, HTTPS only, with username and password. Which interfaces may reach it is configurable (default `lo`, `awg0` and every further ingress that is not isolated; add NetBird `wt0` for access without the VPN). SSH is never opened to VPN clients.
   - A security panel lists open ports on the server that you should close.
   - Live updates via SSE, mobile first, light and dark themes, English and German.
 - **Full CLI.** Status, egresses, clients (QR code included), ordering, kill switch and settings, all from the terminal.
@@ -55,7 +70,7 @@ allowed to send.
 - **No toolchain on the target.**
   - A single static binary with AmneziaWG embedded in userspace, plus WireGuard via the kernel.
   - Runs on any systemd Linux on amd64 or arm64. No DKMS and no kernel headers.
-- **Clean ownership.** vwitch only touches its own nftables tables (`inet vwitch` and `ip vwitch_nat`) and never flushes the ruleset.
+- **Clean ownership.** vwitch only touches its own nftables tables (`inet vwitch`, `ip vwitch_nat` and `inet vwitch_block`) and never flushes the ruleset.
 
 ## Install
 
@@ -108,8 +123,21 @@ ssh -L 8443:127.0.0.1:443 root@<server>
 | | |
 | --- | --- |
 | **Username** | `admin` (or `--admin-user` / `VWITCH_ADMIN_USER`) |
-| **Password** | printed by `vwitch setup` at install time, or written to the `--password-file` you passed (cloud-init examples: `/root/vwitch-admin-password`). In Docker it is in `config/admin-password`. |
+| **Password** | your own, if you chose one at setup (see below); otherwise printed by `vwitch setup` at install time, or written to the `--password-file` you passed (cloud-init examples: `/root/vwitch-admin-password`). In Docker it is in `config/admin-password`. |
 | **Forgot it?** | `vwitch admin passwd` on the server sets a new one. |
+
+To choose the password yourself at install time:
+
+```sh
+# on the server
+printf '%s' 'my long password' | sudo vwitch setup --admin-password-stdin
+# for a new VPS: asks for the password on your machine
+vwitch cloud-init --endpoint vpn.example.org --ask-admin-password > user-data.yaml
+```
+
+vwitch always stores only a bcrypt hash of the password. With cloud-init the
+hashing already happens on your machine: user data is kept in plain text by
+the cloud provider, so it carries only the hash, never the password.
 
 Until you install your own certificate, the browser warns about a
 self-signed certificate. Compare its SHA-256 fingerprint with the one vwitch
@@ -181,6 +209,99 @@ vwitch route list
   hard-coded IP addresses bypass DNS and therefore the route. Addresses a
   client cached before the route existed apply once their DNS entry expires.
 
+## Blocking
+
+Under **Blocking** in the admin UI, or with `vwitch block` and `vwitch set`:
+
+```sh
+vwitch block add ads.example.com tracker.example   # answered with 0.0.0.0
+vwitch block log                                     # recent hits
+vwitch set regions.countries RU,CN
+vwitch set regions.mode block          # or: allow (only these countries)
+vwitch set regions.direction both      # or: outgoing, incoming
+vwitch set regions.enabled true
+```
+
+- **Domains** are answered by vwitch's DNS with `0.0.0.0` (A) or an empty
+  answer, including all subdomains. Like domain routes, this only sees DNS:
+  browsers with their own encrypted DNS bypass it.
+- **Countries** are matched by the address ranges the five regional internet
+  registries publish. vwitch downloads them (about 46 MB) once region blocking
+  is on, keeps a compact copy in `/var/lib/vwitch` and refreshes it weekly.
+  *Outgoing* covers connections clients start. *Incoming* covers new
+  connections from outside to the server, including the VPN port, so a client
+  travelling in a blocked country cannot connect. Connections that already
+  exist keep working. Private and special-purpose ranges are never filtered.
+- **Allow mode for incoming connections** locks out SSH and the VPN from every
+  other country, you included when you travel. The UI warns about it.
+- Every blocked lookup or connection appears in the block log (in memory,
+  the last 1000 entries) with time, client, target, country and direction.
+  Rules live in their own nftables table `inet vwitch_block`.
+
+## Activity
+
+Under **Activity** in the admin UI:
+
+- **Traffic graph** for the last hour, day, week or month, for all clients
+  together or for one client. The overview and every client page show it too.
+  The history is sampled every 10 seconds and kept in
+  `/var/lib/vwitch/traffic.json`.
+- **Per client** download, upload and share for the chosen range.
+- **Domains** clients looked up during the last 24 hours, grouped by site
+  (`www.youtube.com` and `i.ytimg.com` count for their own site), with the
+  clients that asked. Each entry can be blocked or routed through an egress in
+  one step. The list is kept in memory only and can be switched off in the
+  settings (`vwitch set activity false`).
+
+## Ingresses
+
+An ingress is an AmneziaWG interface that clients connect to. Every install
+starts with the ingress `default` on `awg0` and UDP 51845. Add more on the
+**Ingresses** page or with the CLI:
+
+```sh
+vwitch ingress add secure --strict --isolated   # awg1, next free port (51846)
+vwitch client add laptop --ingress secure --qr
+vwitch ingress list
+```
+
+All ingresses share the client network, the server address `10.8.0.1` and
+the server key, so a client can move to another ingress
+(`vwitch client set laptop --ingress default`, then `vwitch client renew laptop`).
+Each ingress has its own port and camouflage parameters:
+
+- **Strict** accepts only apps with AmneziaWG 3.1 (header protection, see below).
+  A strict ingress next to a compatible one lets new and old apps connect at
+  the same time.
+- **Isolated** clients reach their egress, DNS and the portal, but no other
+  client, and no other client reaches them. A new isolated ingress is not
+  added to the admin interfaces, so its clients cannot open the admin UI.
+  Without isolation, clients reach each other, also across ingresses.
+
+An ingress with clients cannot be removed; move or remove its clients first.
+Allow every ingress port in your provider's firewall. Configs written before
+ingresses existed (`server.interface`, `server.listen_port`, `server.awg`) are
+moved to the ingress `default` automatically.
+
+## AmneziaWG 3.1
+
+New ingresses use AmneziaWG 3.1 features that every client understands:
+encrypted content padding (inside the encryption, invisible to the receiver)
+and no cookie replies under load. Junk packet sizes S1 to S4 are at least 12.
+
+- **AWG 3.1 client configs** add `ContentPaddingAddition` to the client's
+  config. New clients get them by default (per ingress: "AmneziaWG 3.1 for new
+  clients", `vwitch ingress set <name> --new-clients-awg3`). Turn them off for
+  apps without AmneziaWG 3.1 support, which reject unknown keys: when adding
+  the client (`vwitch client add tv --awg3=false`, or the switch in the form)
+  or later on the client page.
+- **Strict mode** (Ingresses page, or `vwitch ingress set <name> --strict`)
+  adds header protection and random trailers for every client of that
+  ingress. It changes its parameters, so **each of its clients needs a new
+  config** afterwards (`vwitch client renew <name>`), and they must support
+  AmneziaWG 3.1. Turning it off again also needs new configs. To keep older
+  apps working, put strict mode on a second ingress instead.
+
 ## Configuration
 
 `/etc/vwitch/vwitch.yaml` is the single source of truth. The UI and the CLI
@@ -193,7 +314,7 @@ Defaults:
 | Setting | Default |
 | --- | --- |
 | Client network | `10.8.0.1/24` |
-| AmneziaWG port | `51845/udp` |
+| AmneziaWG ingress | `default` on `awg0`, `51845/udp` |
 | MTU | `1340` |
 | Client DNS | `10.8.0.1` (vwitch), upstream `9.9.9.9` |
 | Admin UI | `https://v.witch` (port 443) on `lo` and `awg0`, user `admin` |
@@ -204,12 +325,12 @@ All of these are configurable.
 ## Security
 
 - **Admin UI.**
-  - HTTPS only and reachable only on the configured admin interfaces. VPN clients on `awg0` never reach it.
+  - HTTPS only and reachable only on the configured admin interfaces (by default `lo` and the VPN ingresses that are not isolated).
   - Without your own certificate, vwitch generates a self-signed one, renews it automatically and logs its SHA-256 fingerprint. Upload your own in the UI or with `vwitch tls set`; it applies without a restart.
   - Sign-in uses a username plus a bcrypt-hashed password, with login rate limiting and cross-origin protection. Changing the sign-in requires the current password.
-  - Server-side sessions use random tokens (not JWT), expire after 2 h idle or 24 h at most, and end on logout, a password change or a restart.
+  - Server-side sessions use random tokens (not JWT). They expire after 7 days without use or 30 days at most, and end on logout or a password change. They survive restarts: the state directory keeps only SHA-256 hashes of the tokens.
 - **Client keys.** A client's private key exists only in the config shown once at creation. vwitch stores only the public key. A lost or outdated config is replaced with `renew`, which revokes the old one. The UI flags clients whose config is outdated after server changes.
-- **Client portal.** Shows each client only its own status, identified by its tunnel address, which WireGuard makes unspoofable. It is protected against cross-site requests.
+- **Client portal.** Shows each client only its own status, identified by its tunnel address, which WireGuard makes unspoofable. It is protected against cross-site requests and DNS rebinding: it only answers for vwitch's own names and the server address, and vwitch's DNS drops upstream answers that point into the client network. The portal and DNS on the server address are reachable only through the tunnel.
 - **systemd unit.** Runs with a capability bounding set (`NET_ADMIN`, `NET_RAW`, `NET_BIND_SERVICE`), `NoNewPrivileges` and strict sandboxing.
 - **Container.** Runs with `cap_drop: ALL` and only the network capabilities added back, plus `no-new-privileges` and a read-only root filesystem. Its base images are pinned by digest.
 - **Releases.** Binaries are static (`CGO_ENABLED=0`) and reproducible (`-trimpath`), and every artifact is listed in `checksums.txt`. CI actions are pinned by commit SHA.
@@ -238,7 +359,7 @@ The dashboard's **Security** panel lists every service that is reachable from
 outside and does not belong to vwitch.
 
 1. **Close everything else.** From the internet, vwitch only needs **UDP 51845**
-   (or your `listen_port`). Use your provider's firewall (Hetzner Cloud
+   (and the ports of further ingresses). Use your provider's firewall (Hetzner Cloud
    Firewall, AWS security groups, …) or nftables/ufw to drop everything else.
    vwitch never touches tables it does not own, so your own rules stay intact.
 2. **Keep admin access off the internet.** The admin UI is only reachable
