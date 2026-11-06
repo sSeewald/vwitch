@@ -138,13 +138,18 @@ func (a *Admin) serveOn(ctx context.Context, addr string, h http.Handler) {
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: a.certificate}}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServeTLS("", "") }()
+	stop := func() {
+		shutdown(srv)
+		if err := <-errc; !errors.Is(err, http.ErrServerClosed) {
+			a.log.Warn("admin server stopped", "addr", addr, "err", err)
+		}
+	}
 	check := time.NewTicker(2 * time.Second)
 	defer check.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			shutdown(srv)
-			<-errc
+			stop()
 			return
 		case err := <-errc:
 			a.log.Error("admin listen", "addr", addr, "err", err)
@@ -156,8 +161,7 @@ func (a *Admin) serveOn(ctx context.Context, addr string, h http.Handler) {
 		case <-check.C:
 			if next := a.d.Config().Web.Admin.Listen; next != addr {
 				a.log.Info("admin UI moves", "from", addr, "to", next)
-				shutdown(srv)
-				<-errc
+				stop()
 				return
 			}
 		}
