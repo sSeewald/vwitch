@@ -45,7 +45,7 @@ func TestNewAndRender(t *testing.T) {
 		t.Fatal(err)
 	}
 	if f.Peer().Get("Endpoint") != "203.0.113.10:51845" || f.Interface().Get("H3") != "5-6" ||
-		f.Interface().Get("DNS") != "9.9.9.9" || f.Interface().Get("I1") != "" {
+		f.Interface().Get("DNS") != c.ServerIP().String() || f.Interface().Get("I1") != "" {
 		t.Fatal(out)
 	}
 	if strings.Contains(out, "::") {

@@ -73,7 +73,8 @@ func ServerPublicKey(c *config.Config) (string, error) {
 }
 
 // Render returns the client's AmneziaWG config file. It contains no IPv6
-// and uses the public resolver only.
+// and uses vwitch itself as DNS server, so v.witch resolves and queries
+// follow the client's egress.
 func Render(c *config.Config, cl config.Client, privateKey string) (string, error) {
 	if c.Server.Endpoint == "" {
 		return "", fmt.Errorf("server.endpoint is not set (vwitch set endpoint <host>)")
@@ -86,7 +87,7 @@ func Render(c *config.Config, cl config.Client, privateKey string) (string, erro
 	i := f.Add("Interface")
 	i.Set("PrivateKey", privateKey)
 	i.Set("Address", cl.Address.String()+"/32")
-	i.Set("DNS", c.DNS.Resolver.String())
+	i.Set("DNS", c.ServerIP().String())
 	i.Set("MTU", strconv.Itoa(c.Server.MTU))
 	a := c.Server.AWG
 	for _, kv := range [][2]string{

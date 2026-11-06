@@ -122,29 +122,72 @@ func (a *Admin) Serve(ctx context.Context) error {
 	if err := a.d.EnsureTLS(); err != nil {
 		return fmt.Errorf("admin certificate: %w", err)
 	}
-	srv := &http.Server{Addr: a.d.Config().Web.Admin.Listen, Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second,
-		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: a.certificate}}
-	go func() {
-		renew := time.NewTicker(24 * time.Hour)
-		defer renew.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				_ = srv.Shutdown(sctx)
-				return
-			case <-renew.C:
-				if err := a.d.EnsureTLS(); err != nil {
-					a.log.Error("renew admin certificate", "err", err)
-				}
-			}
-		}
-	}()
-	if err := srv.ListenAndServeTLS("", ""); !errors.Is(err, http.ErrServerClosed) {
-		return err
+	go a.renewTLS(ctx)
+	h := a.Handler()
+	for ctx.Err() == nil {
+		a.serveOn(ctx, a.d.Config().Web.Admin.Listen, h)
 	}
 	return nil
+}
+
+// serveOn serves on addr until ctx ends or web.admin.listen changes, so a new
+// admin port applies at once and always matches the firewall. A failed
+// listen is retried instead of stopping vwitch.
+func (a *Admin) serveOn(ctx context.Context, addr string, h http.Handler) {
+	srv := &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second,
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: a.certificate}}
+	errc := make(chan error, 1)
+	go func() { errc <- srv.ListenAndServeTLS("", "") }()
+	stop := func() {
+		shutdown(srv)
+		if err := <-errc; !errors.Is(err, http.ErrServerClosed) {
+			a.log.Warn("admin server stopped", "addr", addr, "err", err)
+		}
+	}
+	check := time.NewTicker(2 * time.Second)
+	defer check.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			stop()
+			return
+		case err := <-errc:
+			a.log.Error("admin listen", "addr", addr, "err", err)
+			select {
+			case <-ctx.Done():
+			case <-time.After(5 * time.Second):
+			}
+			return
+		case <-check.C:
+			if next := a.d.Config().Web.Admin.Listen; next != addr {
+				a.log.Info("admin UI moves", "from", addr, "to", next)
+				stop()
+				return
+			}
+		}
+	}
+}
+
+func shutdown(srv *http.Server) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(ctx)
+}
+
+// renewTLS renews the self-signed certificate before it expires.
+func (a *Admin) renewTLS(ctx context.Context) {
+	renew := time.NewTicker(24 * time.Hour)
+	defer renew.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-renew.C:
+			if err := a.d.EnsureTLS(); err != nil {
+				a.log.Error("renew admin certificate", "err", err)
+			}
+		}
+	}
 }
 
 func (a *Admin) certificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {

@@ -21,7 +21,7 @@
     {{if $s.Ports}}
     <p class="small">{{t $l "sec.ports"}}</p>
     <ul class="ports">
-      {{range $s.Ports}}<li><span class="mono">{{.Proto}}/{{.Addr.Port}}</span> <b>{{if .Process}}{{.Process}}{{else}}?{{end}}</b> <span class="muted mono small">{{.Addr}}</span>
+      {{range $s.Ports}}<li><span class="mono">{{.Proto}}/{{.Addr.Port}}</span> <b>{{if .Process}}{{.Process}}{{else}}?{{end}}</b> <span class="addr muted mono small">{{.Addr}}</span>
         {{if and (eq .Proto "tcp") (eq .Addr.Port 22)}}<p class="hint">{{t $l "sec.ssh"}}</p>{{end}}</li>{{end}}
     </ul>
     {{end}}
@@ -70,7 +70,7 @@
       {{else if .Healthy}}<span class="pill ok">{{t $l "egress.up"}}</span>
       {{else}}<span class="pill bad">{{t $l "egress.down"}}</span>{{end}}
     </div>
-    <p class="muted small mono">{{.Endpoint}}{{if .Resolved}} → {{.Resolved}}{{end}}</p>
+    <p class="endpoint mono">{{.Endpoint}}{{if .Resolved}}<span>→ {{.Resolved}}</span>{{end}}</p>
     <div class="stats">
       <div class="stat"><b>{{age .HandshakeAge}}</b><span>{{t $l "egress.handshake"}}</span></div>
       <div class="stat"><b>{{if .LatencyMs}}{{printf "%.0f ms" .LatencyMs}}{{else}}–{{end}}</b><span>{{t $l "egress.latency"}}</span></div>

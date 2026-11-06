@@ -20,14 +20,16 @@
       {{range $o := list "fast" "direct" "block"}}
       <label class="check"><span>{{t $l (print "settings.action." $o)}}</span><input class="switch" type="checkbox" name="portal_actions" value="{{$o}}" {{if hasAction $c.Web.Portal.Actions $o}}checked{{end}}></label>
       {{end}}
+      <p class="hint">{{t $l "settings.portal_actions.hint"}}</p>
     </fieldset>
-    <div class="field"><label for="s11">{{t $l "language"}}</label>
-      <select id="s11" name="language">{{range $.Langs}}<option value="{{.}}" {{if eq . $c.Web.Language}}selected{{end}}>{{t $l (print "lang." .)}}</option>{{end}}</select></div>
+    <div class="field"><label for="s11">{{t $l "settings.language"}}</label>
+      <select id="s11" name="language">{{range $.Langs}}<option value="{{.}}" {{if eq . $c.Web.Language}}selected{{end}}>{{t $l (print "lang." .)}}</option>{{end}}</select>
+      <p class="hint">{{t $l "settings.language.hint"}}</p></div>
   </section>
 
   <section class="card stack">
     <h3>{{t $l "settings.network"}}</h3>
-    <div class="field"><label for="s5">{{t $l "settings.endpoint"}}</label><input id="s5" name="endpoint" value="{{$c.Server.Endpoint}}" autocapitalize="none" spellcheck="false"><p class="hint">{{t $l "settings.endpoint.hint"}}</p></div>
+    <div class="field"><label for="s5">{{t $l "settings.endpoint"}}</label><input id="s5" name="endpoint" value="{{$c.Server.Endpoint}}" required autocapitalize="none" spellcheck="false"><p class="hint">{{t $l "settings.endpoint.hint"}}</p></div>
     <div class="field"><label for="s6">{{t $l "settings.resolver"}}</label><input id="s6" name="resolver" value="{{$c.DNS.Resolver}}" inputmode="decimal"></div>
     <div class="field"><label for="s9">{{t $l "settings.admin_interfaces"}}</label><input id="s9" name="admin_interfaces" value="{{join $c.Server.AdminInterfaces ", "}}" autocapitalize="none" spellcheck="false"><p class="hint">{{t $l "settings.admin_interfaces.hint"}}</p></div>
     <label class="check"><span>{{t $l "settings.lockdown_ssh"}}</span><input class="switch" type="checkbox" name="lockdown_ssh" value="true" {{if $c.Server.LockdownSSH}}checked{{end}}></label>

@@ -86,7 +86,7 @@
   "settings.resolver": "Öffentlicher DNS-Resolver",
   "settings.hostnames": "Web-Adresse für Clients",
   "settings.hostnames.hint": "Clients öffnen http://<erster Name>. Mehrere Namen mit Komma trennen.",
-  "settings.portal_actions": "Schalter für Clients",
+  "settings.portal_actions": "Was Clients auf ihrer Seite selbst schalten dürfen",
   "settings.admin_interfaces": "Interfaces mit Zugriff auf diese Admin-Seite",
   "settings.lockdown_ssh": "SSH nur noch über diese Interfaces (nie über awg0), sobald z. B. wt0 aktiv ist",
   "settings.security": "Sicherheit",
@@ -228,5 +228,8 @@
   "route.name.placeholder": "z. B. streaming",
   "event.route_added": "Route %s über %s angelegt",
   "event.route_changed": "Route %s geändert (über %s)",
-  "event.route_removed": "Route %s gelöscht"
+  "event.route_removed": "Route %s gelöscht",
+  "settings.portal_actions.hint": "Schaltet nichts sofort um. Legt nur fest, welche Schalter jeder Client auf seiner eigenen Seite (http://v.witch) sieht. Direktmodus-Schalter erscheinen nur, wenn die eigene Leitung des Servers erlaubt ist.",
+  "settings.language": "Standardsprache",
+  "settings.language.hint": "Für Clients und Browser ohne eigene Wahl. Die Sprache dieser Seite stellst du oben mit DE/EN um."
 }

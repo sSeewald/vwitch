@@ -57,3 +57,20 @@ func TestPublic(t *testing.T) {
 		}
 	}
 }
+
+func TestExposedSkipsOverlayAndDHCP(t *testing.T) {
+	sock := func(proto, addr string) Socket {
+		return Socket{Proto: proto, Addr: netip.MustParseAddrPort(addr), Inode: 1}
+	}
+	got := Exposed([]Socket{
+		sock("udp", "100.75.38.176:53"),     // NetBird DNS on wt0
+		sock("udp", "[fd7a:115c::1]:41641"), // Tailscale ULA
+		sock("udp", "2.31.147.208:68"),      // DHCP client
+		sock("udp", "[2a01:4f8::1]:546"),    // DHCPv6 client
+		sock("tcp", "172.31.5.9:3306"),      // private, but 1:1 NAT in clouds: report
+		sock("udp", "0.0.0.0:51820"),        // wildcard: report
+	}, func(Socket) bool { return false })
+	if len(got) != 2 || got[0].Addr.Port() != 3306 || got[1].Addr.Port() != 51820 {
+		t.Fatalf("exposed %v", got)
+	}
+}

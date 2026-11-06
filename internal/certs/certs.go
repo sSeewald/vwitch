@@ -98,3 +98,16 @@ func first(names []string) string {
 	}
 	return names[0]
 }
+
+// Covers reports whether cert is valid for every name (host names or IPs).
+func Covers(cert *x509.Certificate, names []string) bool {
+	for _, n := range names {
+		if n == "" {
+			continue
+		}
+		if cert.VerifyHostname(n) != nil {
+			return false
+		}
+	}
+	return true
+}

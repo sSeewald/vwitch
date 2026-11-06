@@ -87,7 +87,7 @@ func Exposed(sockets []Socket, expected func(Socket) bool) []Socket {
 	seen := map[string]bool{}
 	for _, s := range sockets {
 		a := s.Addr.Addr()
-		if s.Inode == 0 || a.IsLoopback() || a.IsLinkLocalUnicast() || expected(s) {
+		if s.Inode == 0 || a.IsLoopback() || a.IsLinkLocalUnicast() || overlay(a) || dhcpClient(s) || expected(s) {
 			continue
 		}
 		key := fmt.Sprintf("%s/%d/%s", s.Proto, s.Addr.Port(), s.Process)
@@ -110,4 +110,18 @@ func Public(a netip.Addr) bool {
 	return a.IsGlobalUnicast() && !a.IsPrivate() && !shared.Contains(a)
 }
 
-var shared = netip.MustParsePrefix("100.64.0.0/10")
+var (
+	shared = netip.MustParsePrefix("100.64.0.0/10")
+	ula    = netip.MustParsePrefix("fc00::/7")
+)
+
+// overlay reports addresses of overlay VPNs and CGNAT (NetBird, Tailscale):
+// a socket bound only to such an address is not reachable from the internet.
+// RFC 1918 addresses are not excluded: clouds map them 1:1 to public ones.
+func overlay(a netip.Addr) bool { return shared.Contains(a) || ula.Contains(a) }
+
+// dhcpClient reports the DHCP client sockets (IPv4 68, IPv6 546) every
+// server with a dynamic address has. They are clients, not services.
+func dhcpClient(s Socket) bool {
+	return s.Proto == "udp" && (s.Addr.Port() == 68 || s.Addr.Port() == 546)
+}

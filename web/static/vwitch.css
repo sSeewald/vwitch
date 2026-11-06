@@ -80,7 +80,7 @@ a { color: var(--accent); }
 /* cards */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .stack > * + * { margin-top: 12px; }
-.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
 h1 { font-size: 21px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -.02em; }
 h2 { font-size: 17px; margin: 28px 0 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: 13px; }
 h3 { font-size: 17px; margin: 0; }
@@ -99,10 +99,13 @@ p { margin: 0 0 12px; }
 .pill.bad { color: var(--bad); }
 .hero { display: flex; gap: 14px; align-items: center; }
 .hero .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 18%, transparent); }
-.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
-.stat { background: var(--surface-2); border-radius: var(--radius-s); padding: 8px 10px; }
-.stat b { display: block; font-size: 15px; }
-.stat span { font-size: 12px; color: var(--muted); }
+/* tiles size to the card, not the window */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 8px; margin-top: 12px; }
+.stat { background: var(--surface-2); border-radius: var(--radius-s); padding: 8px 10px; min-width: 0; }
+.stat b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.endpoint { margin: 4px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.endpoint span { display: block; }
 
 /* forms */
 label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
@@ -241,7 +244,6 @@ input::file-selector-button {
   .sticky-save button { width: auto; }
 }
 @media (min-width: 520px) {
-  .stats { grid-template-columns: repeat(3, 1fr); }
   h1 { font-size: 24px; }
 }
 
@@ -292,6 +294,8 @@ pre.mono { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--sur
 .security[open] > summary::after { transform: rotate(90deg); }
 .sec-body { margin-top: 14px; }
 .ports, .advice { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.ports li { overflow-wrap: anywhere; }
+.ports .addr { display: block; }
 .ports .hint { margin: 2px 0 0; }
 .credits { display: flex; align-items: center; gap: 10px; }
 .credits .gh { display: inline-flex; color: var(--muted); padding: 4px; border-radius: 6px; }
