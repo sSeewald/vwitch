@@ -31,8 +31,8 @@ func TestRender(t *testing.T) {
 	}
 	for _, want := range []string{
 		"releases/download/v1.2.3/install.sh | sh -s -- --version 1.2.3",
-		"--endpoint vpn.example.org", "--allow-direct", "--admin-interfaces lo,wt0", "--lockdown-ssh",
-		"vwitch egress add home /etc/vwitch/egress.d/home.conf --resolve ipv6",
+		"--endpoint vpn.example.org", "--allow-direct", "--admin-interfaces lo,awg0,wt0", "--lockdown-ssh",
+		"vwitch egress add home /root/vwitch-egress/home.conf --resolve ipv6",
 		"      PrivateKey = cHJpdmF0ZQ==",
 	} {
 		if !strings.Contains(out, want) {

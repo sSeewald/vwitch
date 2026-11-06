@@ -11,7 +11,7 @@ const (
 	DefaultListenPort  = 51845
 	DefaultMTU         = 1340
 	DefaultPortalPort  = 80
-	DefaultAdminListen = ":8090"
+	DefaultAdminListen = ":443"
 	DefaultAdminUser   = "admin"
 	DefaultKeepalive   = 25
 	DefaultWeight      = 1
@@ -43,7 +43,7 @@ func (c *Config) ApplyDefaults() {
 		s.Address = DefaultAddress
 	}
 	if s.AdminInterfaces == nil {
-		s.AdminInterfaces = []string{"lo"}
+		s.AdminInterfaces = []string{"lo", s.Interface} // localhost and every VPN client
 	}
 	if !c.DNS.Resolver.IsValid() {
 		c.DNS.Resolver = DefaultResolver

@@ -80,7 +80,7 @@ func setupCmd(g *globals) *cobra.Command {
 	f.StringVar(&address, "address", config.DefaultAddress.String(), "server address and client network")
 	f.StringVar(&resolver, "resolver", config.DefaultResolver.String(), "public DNS resolver for clients")
 	f.BoolVar(&o.AllowDirect, "allow-direct", false, "allow the server's own uplink as egress (direct)")
-	f.StringSliceVar(&o.AdminInterfaces, "admin-interfaces", []string{"lo"}, "interfaces allowed to reach the admin UI")
+	f.StringSliceVar(&o.AdminInterfaces, "admin-interfaces", nil, "interfaces allowed to reach the admin UI (default lo,awg0)")
 	f.BoolVar(&o.LockdownSSH, "lockdown-ssh", false, "allow SSH only on admin interfaces once they are up")
 	f.StringVar(&o.Language, "language", config.DefaultLanguage, "default UI language (en, de)")
 	f.StringVar(&o.Username, "admin-user", config.DefaultAdminUser, "admin login name")

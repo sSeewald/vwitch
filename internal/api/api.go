@@ -38,6 +38,10 @@ type (
 		Action config.PortalAction `json:"action"`
 		On     bool                `json:"on"`
 	}
+	RouteRequest struct {
+		Egress  string   `json:"egress"`
+		Domains []string `json:"domains"`
+	}
 	SetRequest      struct{ Key, Value string }
 	PasswordRequest struct{ Password string }
 	TLSRequest      struct{ Cert, Key string } // PEM contents; both empty = new self-signed
@@ -101,6 +105,15 @@ func Handler(d *daemon.Daemon) http.Handler {
 		if decode(w, r, &req) {
 			reply(w, nil, d.SetGlobal(req.KillSwitch, req.Fast))
 		}
+	})
+	m.HandleFunc("PUT /v1/routes/{name}", func(w http.ResponseWriter, r *http.Request) {
+		var req RouteRequest
+		if decode(w, r, &req) {
+			reply(w, nil, d.SetRoute(r.PathValue("name"), req.Egress, req.Domains))
+		}
+	})
+	m.HandleFunc("DELETE /v1/routes/{name}", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, nil, d.RemoveRoute(r.PathValue("name")))
 	})
 	m.HandleFunc("POST /v1/settings", func(w http.ResponseWriter, r *http.Request) {
 		var req SetRequest

@@ -17,7 +17,7 @@ docker run -d --name "$NAME" \
   -e VWITCH_ENDPOINT=demo.example.org -e VWITCH_ADMIN_INTERFACES=lo,eth0 \
   -e VWITCH_ALLOW_DIRECT=true -e VWITCH_ADMIN_PASSWORD="$PASSWORD" \
   -e VWITCH_LANGUAGE="${DEV_LANGUAGE:-de}" \
-  -p "127.0.0.1:$PORT:8090" "$IMAGE" serve --init --debug >/dev/null
+  -p "127.0.0.1:$PORT:443" "$IMAGE" serve --init --debug >/dev/null
 
 # wait for the API socket
 i=0
@@ -35,6 +35,8 @@ egress() {
 egress home 192.168.1.201/24 home.example.org:51820
 egress office 10.20.0.2/32 office.example.org:51820
 for c in phone laptop tablet; do docker exec "$NAME" vwitch client add "$c" >/dev/null; done
+docker exec "$NAME" vwitch route set streaming --via home netflix.com youtube.com googlevideo.com >/dev/null
+docker exec "$NAME" vwitch route set work --via office corp.example.com >/dev/null
 
 echo "vwitch dev: https://127.0.0.1:$PORT  user: admin  password: $PASSWORD"
 echo "CLI: docker exec $NAME vwitch status   logs: make dev-logs   stop: make dev-stop"

@@ -14,6 +14,7 @@ import (
 
 	"github.com/sseewald/vwitch/internal/config"
 	"github.com/sseewald/vwitch/internal/dns"
+	"github.com/sseewald/vwitch/internal/domains"
 	"github.com/sseewald/vwitch/internal/egress"
 	"github.com/sseewald/vwitch/internal/firewall"
 	"github.com/sseewald/vwitch/internal/health"
@@ -39,6 +40,8 @@ type Daemon struct {
 	egresses  map[string]*egressRuntime
 	decisions map[string]selector.Target // by client name
 	lastFW    string
+	basePlan  routing.Plan  // routing without domain rules, from the last reconcile
+	learned   domains.Cache // addresses learned for domain routes
 	ingSpec   ingress.Spec
 	status    Status
 	subs      map[chan Status]struct{}
@@ -86,6 +89,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		Upstream: netip.AddrPortFrom(c.DNS.Resolver, 53),
 		Names:    func() []string { return d.cfg.Get().Web.Hostnames },
 		Route:    d.dnsRoute,
+		Learn:    d.learn,
 		Timeout:  c.Health.Timeout,
 		Log:      d.log,
 	}
@@ -196,6 +200,9 @@ func (d *Daemon) reconcile(ctx context.Context) {
 		case selector.KindPortal:
 			fp.PortalClients = append(fp.PortalClients, cl.Address)
 		}
+		if t.Kind == selector.KindBlock || t.Kind == selector.KindPortal {
+			rp.Blocked = append(rp.Blocked, cl.Address)
+		}
 		rp.Clients = append(rp.Clients, rc)
 		if old, ok := d.decisions[cl.Name]; ok && (old.Kind != t.Kind || old.Egress != t.Egress) {
 			changed = append(changed, cl.Address)
@@ -213,9 +220,9 @@ func (d *Daemon) reconcile(ctx context.Context) {
 			d.lastFW = r
 		}
 	}
-	if err := d.sys.ApplyRouting(rp); err != nil {
-		d.log.Error("routing", "err", err)
-	}
+	d.basePlan = rp
+	d.learned.Forget(func(route string) bool { _, ok := c.Route(route); return ok })
+	d.applyRouting(c, sw.KillSwitch, now)
 	if err := d.sys.FlushConntrack(changed); err != nil {
 		d.log.Warn("conntrack flush", "err", err)
 	}
@@ -330,10 +337,14 @@ func (d *Daemon) checkHealth(ctx context.Context) {
 		age := health.HandshakeAge(now, r.stats.LastHandshake)
 		chk := health.Check{HandshakeAge: age, MaxAge: e.EffectiveMaxAge(c.Health), ProbesOK: r.ok, Probes: r.n}
 		rt.tracker.Rise, rt.tracker.Fall = c.Health.Rise, c.Health.Fall
+		known := rt.tracker.Known()
 		if healthy, changed := rt.tracker.Observe(chk.OK()); changed {
-			if healthy {
+			switch {
+			case healthy && !known:
+				d.event("egress_reachable", r.name)
+			case healthy:
 				d.event("egress_up", r.name)
-			} else {
+			default:
 				d.event("egress_down", r.name)
 			}
 		}
@@ -368,28 +379,6 @@ func (d *Daemon) checkHealth(ctx context.Context) {
 	}
 }
 
-// dnsRoute tells the DNS forwarder where a client's queries may go.
-func (d *Daemon) dnsRoute(client netip.Addr) (string, bool) {
-	c := d.cfg.Get()
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	for _, cl := range c.Clients {
-		if cl.Address != client {
-			continue
-		}
-		t := d.decisions[cl.Name]
-		switch t.Kind {
-		case selector.KindEgress:
-			e, ok := c.Egress(t.Egress)
-			return e.Iface(), ok
-		case selector.KindDirect, selector.KindPortal:
-			return "", true
-		}
-		return "", false
-	}
-	return "", false
-}
-
 // event records a user-visible event (i18n key "event.<key>") and logs it
 // in English.
 func (d *Daemon) event(key string, args ...string) {
@@ -409,7 +398,7 @@ func describe(t selector.Target) string {
 // once one of them (other than lo) is up, so SSH never locks itself out.
 func (d *Daemon) sshLocked(c *config.Config) bool {
 	return c.Server.LockdownSSH && slices.ContainsFunc(c.Server.AdminInterfaces, func(i string) bool {
-		return i != "lo" && d.sys.InterfaceUp(i)
+		return i != "lo" && i != c.Server.Interface && d.sys.InterfaceUp(i)
 	})
 }
 
@@ -418,7 +407,7 @@ func adminPort(listen string) uint16 {
 	if err == nil {
 		return ap.Port()
 	}
-	if _, port, err := config.SplitEndpoint("x" + listen); err == nil { // ":8090"
+	if _, port, err := config.SplitEndpoint("x" + listen); err == nil { // ":443"
 		return port
 	}
 	return 0

@@ -67,7 +67,7 @@ func (v Vars) InstallArgs() string {
 		args = append(args, "--allow-direct")
 	}
 	if v.NetBirdSetupKey != "" {
-		args = append(args, "--admin-interfaces", "lo,wt0")
+		args = append(args, "--admin-interfaces", "lo,"+config.DefaultInterface+",wt0")
 		if v.LockdownSSH {
 			args = append(args, "--lockdown-ssh")
 		}

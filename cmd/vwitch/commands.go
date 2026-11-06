@@ -59,7 +59,7 @@ func statusCmd(g *globals) *cobra.Command {
 			if g.json {
 				return printJSON(st)
 			}
-			fmt.Printf("vwitch %s · strategy %s · offline %s · kill switch %v · full speed %v\n\n",
+			fmt.Printf("vwitch %s · strategy %s · offline %s · kill switch %v · direct mode %v\n\n",
 				st.Version, st.Selection.Strategy, st.Selection.Offline, st.Switches.KillSwitch, st.Switches.Fast)
 			w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 			fmt.Fprintln(w, "EGRESS\tSTATE\tPRIO\tWEIGHT\tHANDSHAKE\tLATENCY\tCLIENTS\tENDPOINT")

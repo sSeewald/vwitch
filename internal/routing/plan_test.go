@@ -41,3 +41,33 @@ func TestPlanAlwaysFailSafe(t *testing.T) {
 		t.Fatalf("last rule %v", last)
 	}
 }
+
+func TestPlanDomains(t *testing.T) {
+	p := Plan{
+		ClientNet: netip.MustParsePrefix("10.8.0.0/24"),
+		Clients:   []Client{{Addr: netip.MustParseAddr("10.8.0.2"), Table: 51821}},
+		Domains:   []Domain{{Dst: netip.MustParseAddr("142.250.0.1"), Table: 51822}},
+		Blocked:   []netip.Addr{netip.MustParseAddr("10.8.0.5")},
+	}
+	var got []string
+	for _, r := range p.Rules() {
+		got = append(got, r.String())
+	}
+	want := []string{
+		"70: from all to 10.8.0.0/24 lookup 254",
+		"72: from 10.8.0.5/32 unreachable",
+		"75: from 10.8.0.0/24 to 142.250.0.1/32 lookup 51822",
+		"80: from 10.8.0.2/32 lookup 51821",
+		"99: from 10.8.0.0/24 unreachable",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("got:\n%s", strings.Join(got, "\n"))
+	}
+	// without domain routes no block rules are needed
+	p.Domains = nil
+	for _, r := range p.Rules() {
+		if r.Priority == PrioBlocked {
+			t.Fatal("block rule without domain routes")
+		}
+	}
+}

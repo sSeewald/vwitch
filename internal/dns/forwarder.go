@@ -16,9 +16,13 @@ import (
 	"github.com/sseewald/vwitch/internal/sockopt"
 )
 
-// Route tells the forwarder how a client's queries leave the server:
+// Route tells the forwarder how a client's query for name leaves the server:
 // through iface ("" = server uplink), or not at all (ok == false).
-type Route func(client netip.Addr) (iface string, ok bool)
+type Route func(client netip.Addr, name string) (iface string, ok bool)
+
+// Learn receives the IPv4 addresses of an answer before the client gets it,
+// so routing can follow the name (domain routes). ttl is the lowest TTL.
+type Learn func(name string, addrs []netip.Addr, ttl time.Duration)
 
 // Forwarder answers the local UI names itself and forwards everything else
 // to the public resolver through the asking client's current exit.
@@ -27,6 +31,7 @@ type Forwarder struct {
 	Upstream netip.AddrPort
 	Names    func() []string // local names, e.g. vwitch.internal
 	Route    Route
+	Learn    Learn // optional
 	Timeout  time.Duration
 	Log      *slog.Logger
 }
@@ -104,7 +109,8 @@ func (f *Forwarder) handle(ctx context.Context, q []byte, client netip.Addr, net
 	if f.isLocal(question.Name.String()) {
 		return f.localAnswer(h, question)
 	}
-	iface, ok := f.Route(client.Unmap())
+	name := strings.TrimSuffix(strings.ToLower(question.Name.String()), ".")
+	iface, ok := f.Route(client.Unmap(), name)
 	if !ok {
 		return reply(h, question, dnsmessage.RCodeRefused, nil)
 	}
@@ -113,7 +119,46 @@ func (f *Forwarder) handle(ctx context.Context, q []byte, client netip.Addr, net
 		f.Log.Debug("dns forward failed", "client", client, "err", err)
 		return reply(h, question, dnsmessage.RCodeServerFailure, nil)
 	}
+	if f.Learn != nil && question.Type == dnsmessage.TypeA {
+		if addrs, ttl := answerAddrs(resp); len(addrs) > 0 {
+			f.Learn(name, addrs, ttl)
+		}
+	}
 	return resp
+}
+
+// answerAddrs returns the A records of a response and their lowest TTL.
+func answerAddrs(resp []byte) ([]netip.Addr, time.Duration) {
+	var p dnsmessage.Parser
+	if _, err := p.Start(resp); err != nil {
+		return nil, 0
+	}
+	if err := p.SkipAllQuestions(); err != nil {
+		return nil, 0
+	}
+	var addrs []netip.Addr
+	ttl := uint32(0)
+	for {
+		h, err := p.AnswerHeader()
+		if err != nil {
+			break
+		}
+		if h.Type != dnsmessage.TypeA {
+			if err := p.SkipAnswer(); err != nil {
+				break
+			}
+			continue
+		}
+		a, err := p.AResource()
+		if err != nil {
+			break
+		}
+		addrs = append(addrs, netip.AddrFrom4(a.A))
+		if ttl == 0 || h.TTL < ttl {
+			ttl = h.TTL
+		}
+	}
+	return addrs, time.Duration(ttl) * time.Second
 }
 
 func (f *Forwarder) isLocal(name string) bool {

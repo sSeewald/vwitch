@@ -40,6 +40,9 @@ func (t *Tracker) Observe(ok bool) (healthy, changed bool) {
 // Healthy returns the current state.
 func (t *Tracker) Healthy() bool { return t.known && t.healthy }
 
+// Known reports whether the tracker has seen at least one check.
+func (t *Tracker) Known() bool { return t.known }
+
 // Check combines the inputs of one health check.
 type Check struct {
 	HandshakeAge time.Duration // negative: never

@@ -19,6 +19,7 @@ type Status struct {
 	Switches  state.Switches   `json:"switches"`
 	Egresses  []EgressStatus   `json:"egresses"`
 	Clients   []ClientStatus   `json:"clients"`
+	Routes    []RouteStatus    `json:"routes,omitempty"`
 	Events    []state.Event    `json:"events"`
 }
 
@@ -90,6 +91,7 @@ func (d *Daemon) buildStatus(c *config.Config, sw state.Switches, now time.Time)
 		}
 		st.Egresses = append(st.Egresses, es)
 	}
+	st.Routes = d.routeStatus(c, now)
 	peers, _ := d.sys.PeerStats()
 	for _, cl := range c.Clients {
 		cs := ClientStatus{Name: cl.Name, Address: cl.Address.String(), Enabled: cl.Enabled, Active: cl.Active(now),
@@ -128,6 +130,7 @@ func (d *Daemon) Status() Status {
 	st := d.status
 	st.Egresses = slices.Clone(st.Egresses)
 	st.Clients = slices.Clone(st.Clients)
+	st.Routes = slices.Clone(st.Routes)
 	st.Events = slices.Clone(st.Events)
 	return st
 }

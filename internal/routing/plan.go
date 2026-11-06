@@ -15,12 +15,14 @@ import (
 const (
 	PrioProbe       = 60 // health probes bound to an egress interface
 	PrioLocal       = 70 // traffic to the client network stays local
+	PrioBlocked     = 72 // blocked clients never reach a domain route
+	PrioDomain      = 75 // domain routes: learned addresses via a fixed egress
 	PrioClient      = 80 // per-client exit
 	PrioUnreachable = 99 // fail-safe: everything else from clients dies here
 )
 
 // OwnedPriorities lists every priority vwitch manages.
-var OwnedPriorities = []int{PrioProbe, PrioLocal, PrioClient, PrioUnreachable}
+var OwnedPriorities = []int{PrioProbe, PrioLocal, PrioBlocked, PrioDomain, PrioClient, PrioUnreachable}
 
 // TableMain is the kernel's main table, used for the direct exit.
 const TableMain = 254
@@ -37,11 +39,21 @@ type Client struct {
 	Table int
 }
 
+// Domain routes traffic to one learned address through an egress table.
+type Domain struct {
+	Dst   netip.Addr
+	Table int
+}
+
 // Plan is the desired routing state.
 type Plan struct {
 	ClientNet netip.Prefix
 	Egresses  []Egress
 	Clients   []Client
+	// Domains apply to every client except Blocked ones (kill switch,
+	// block, captive portal), which get an explicit unreachable rule first.
+	Domains []Domain
+	Blocked []netip.Addr
 }
 
 // Rule is a desired ip rule.
@@ -67,6 +79,14 @@ func (p Plan) Rules() []Rule {
 		rs = append(rs, Rule{Priority: PrioProbe, OIF: e.Iface, Table: e.Table})
 	}
 	rs = append(rs, Rule{Priority: PrioLocal, Dst: p.ClientNet, Table: TableMain})
+	if len(p.Domains) > 0 {
+		for _, a := range p.Blocked {
+			rs = append(rs, Rule{Priority: PrioBlocked, Src: netip.PrefixFrom(a, 32), Unreachable: true})
+		}
+		for _, d := range p.Domains {
+			rs = append(rs, Rule{Priority: PrioDomain, Src: p.ClientNet, Dst: netip.PrefixFrom(d.Dst, 32), Table: d.Table})
+		}
+	}
 	for _, c := range p.Clients {
 		if c.Table != 0 {
 			rs = append(rs, Rule{Priority: PrioClient, Src: netip.PrefixFrom(c.Addr, 32), Table: c.Table})

@@ -25,4 +25,4 @@ vwitch cloud-init --allow-direct > user-data.yaml
 ```
 
 The admin UI is then reachable via an SSH tunnel:
-`ssh -L 8090:127.0.0.1:8090 root@<server>` → https://127.0.0.1:8090
+`ssh -L 8443:127.0.0.1:443 root@<server>` → https://127.0.0.1:8443, or add a client and open https://v.witch

@@ -19,7 +19,7 @@ services:
       VWITCH_ENDPOINT: vpn.example.org   # public address clients connect to
       VWITCH_ALLOW_DIRECT: "true"
       VWITCH_LANGUAGE: de
-      # VWITCH_ADMIN_INTERFACES: lo,wt0
+      # VWITCH_ADMIN_INTERFACES: lo,awg0,wt0
     volumes:
       - ./config:/etc/vwitch        # vwitch.yaml + admin-password on first start
       - ./state:/var/lib/vwitch

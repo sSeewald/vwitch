@@ -61,6 +61,7 @@ type Config struct {
 	Web       Web       `yaml:"web"`
 	Egresses  []Egress  `yaml:"egresses"`
 	Clients   []Client  `yaml:"clients"`
+	Routes    []Route   `yaml:"routes,omitempty"`
 }
 
 // Server describes the AmneziaWG ingress.
@@ -248,6 +249,25 @@ func (c *Config) Egress(name string) (*Egress, bool) {
 }
 
 // Client returns the client with the given name.
+// Route sends the listed domains, including their subdomains, through one
+// egress. Domains are normalized (domains.Normalize), sorted and unique
+// across all routes.
+type Route struct {
+	Name    string   `yaml:"name"`
+	Egress  string   `yaml:"egress"`
+	Domains []string `yaml:"domains"`
+}
+
+// Route returns the route with the given name.
+func (c *Config) Route(name string) (*Route, bool) {
+	for i := range c.Routes {
+		if c.Routes[i].Name == name {
+			return &c.Routes[i], true
+		}
+	}
+	return nil, false
+}
+
 func (c *Config) Client(name string) (*Client, bool) {
 	for i := range c.Clients {
 		if c.Clients[i].Name == name {

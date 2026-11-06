@@ -9,13 +9,13 @@ packages:
 {{- if or .Egresses .NetBirdSetupKey}}
 write_files:
 {{- range .Egresses}}
-  - path: /etc/vwitch/egress.d/{{.Name}}.conf
+  - path: /root/vwitch-egress/{{.Name}}.conf
     permissions: "0600"
     content: |
 {{indent 6 .Config}}
 {{- end}}
 {{- if .NetBirdSetupKey}}
-  - path: /etc/vwitch/netbird.env
+  - path: /root/netbird.env
     permissions: "0600"
     content: |
       NB_SETUP_KEY={{.NetBirdSetupKey}}
@@ -26,11 +26,11 @@ runcmd:
 {{- if .NetBirdSetupKey}}
   # NetBird for admin access (interface wt0); vwitch never touches its tables
   - curl -fsSL https://pkgs.netbird.io/install.sh | sh
-  - . /etc/vwitch/netbird.env && netbird up --setup-key "$NB_SETUP_KEY" ${NB_MANAGEMENT_URL:+--management-url "$NB_MANAGEMENT_URL"} && rm -f /etc/vwitch/netbird.env
+  - . /root/netbird.env && netbird up --setup-key "$NB_SETUP_KEY" ${NB_MANAGEMENT_URL:+--management-url "$NB_MANAGEMENT_URL"} && rm -f /root/netbird.env
 {{- end}}
   - curl -fsSL https://github.com/{{.Repo}}/releases/{{if eq .Version "latest"}}latest/download{{else}}download/v{{.Version}}{{end}}/install.sh | sh -s -- {{.InstallArgs}}
 {{- range .Egresses}}
-  - vwitch egress add {{.Name}} /etc/vwitch/egress.d/{{.Name}}.conf{{if .Resolve}} --resolve {{.Resolve}}{{end}} && rm -f /etc/vwitch/egress.d/{{.Name}}.conf
+  - vwitch egress add {{.Name}} /root/vwitch-egress/{{.Name}}.conf{{if .Resolve}} --resolve {{.Resolve}}{{end}} && rm -f /root/vwitch-egress/{{.Name}}.conf
 {{- end}}
   - vwitch doctor || true
 final_message: "vwitch installed. Admin password: /root/vwitch-admin-password. Add clients with: vwitch client add <name> --qr"
