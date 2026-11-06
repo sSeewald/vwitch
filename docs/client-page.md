@@ -6,6 +6,13 @@ Every connected device can open its own small status page at
 needs no login: vwitch recognises the device by its tunnel address, which
 cannot be faked.
 
+The page only opens under its own names (`v.witch`, `vwitch.internal`, or the
+server's tunnel address such as `10.8.0.1`). Any other address that leads to
+it is redirected to http://v.witch, so a device that hits the page by
+accident, for example during an outage, still lands on the right page. Buttons
+only work under these names, so other websites cannot press them for the
+device.
+
 The page is meant for the people using the VPN, not for the administrator.
 It is made for phones, and it shows in plain words where the device's traffic
 goes and what the person can do about it.

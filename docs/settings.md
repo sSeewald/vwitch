@@ -35,7 +35,7 @@ In every case vwitch returns to an egress by itself as soon as one recovers.
 
 | Setting | Meaning | Key |
 | --- | --- | --- |
-| **Web address for clients** | The names clients use for vwitch inside the tunnel, for example `v.witch`. The first one is shown to clients. | `hostnames` |
+| **Web address for clients** | The names clients use for vwitch inside the tunnel, for example `v.witch`. The first one is shown to clients. The [client page](client-page.md) answers only under these names and the server's tunnel address; other addresses are redirected to the first name. | `hostnames` |
 | **What clients may switch on their own page** | Which buttons each client sees on its [client page](client-page.md): *direct mode*, *continue directly during an outage*, *pause own traffic*. This does not switch anything by itself. | `portal_actions` |
 | **Domain list** | Keep the looked-up domains of the last 24 hours in memory for the [Activity](activity.md) page. | `activity` |
 | **Default language** | English or German, for clients and browsers without their own choice. Switch the language of the admin page with **DE / EN** at the top. | `language` |
