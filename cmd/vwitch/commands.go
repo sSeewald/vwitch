@@ -191,7 +191,7 @@ func egressCmd(g *globals) *cobra.Command {
 func clientCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{Use: "client", Short: "Manage AmneziaWG clients"}
 	var expires, strategy, fixed string
-	var showQR bool
+	var showQR, awg3 bool
 	clientOpts := func(c *cobra.Command) (daemon.ClientOptions, error) {
 		o := daemon.ClientOptions{}
 		if c.Flags().Changed("expires") {
@@ -213,6 +213,9 @@ func clientCmd(g *globals) *cobra.Command {
 		if c.Flags().Changed("fixed") {
 			o.Fixed = &fixed
 		}
+		if c.Flags().Changed("awg3") {
+			o.AWG3 = &awg3
+		}
 		return o, nil
 	}
 	add := &cobra.Command{
@@ -233,7 +236,7 @@ func clientCmd(g *globals) *cobra.Command {
 	}
 	set := &cobra.Command{
 		Use:   "set <name>",
-		Short: "Change expiry or strategy",
+		Short: "Change expiry, strategy or AWG 3.1",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			o, err := clientOpts(c)
@@ -247,6 +250,7 @@ func clientCmd(g *globals) *cobra.Command {
 		c.Flags().StringVar(&expires, "expires", "", "last valid day YYYY-MM-DD, or never")
 		c.Flags().StringVar(&strategy, "strategy", "", "override: failover, weighted, fixed (empty: global)")
 		c.Flags().StringVar(&fixed, "fixed", "", "egress for strategy fixed")
+		c.Flags().BoolVar(&awg3, "awg3", false, "add the AmneziaWG 3.1 lines to the config (the client app must support AWG 3.1)")
 	}
 	add.Flags().BoolVar(&showQR, "qr", false, "also print a QR code")
 

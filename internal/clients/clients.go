@@ -100,6 +100,17 @@ func Render(c *config.Config, cl config.Client, privateKey string) (string, erro
 	for n, v := range cl.I {
 		i.Set(fmt.Sprintf("I%d", n+1), v)
 	}
+	if a.Strict() || cl.AWG3 {
+		if a.ContentPadding != "" {
+			i.Set("ContentPaddingAddition", a.ContentPadding)
+		}
+		if a.HeaderProtectionKey != "" {
+			i.Set("HeaderProtectionKey", a.HeaderProtectionKey)
+		}
+		if a.RandomTrailers {
+			i.Set("RandomTrailers", "1")
+		}
+	}
 	p := f.Add("Peer")
 	p.Set("PublicKey", pub)
 	p.Set("PresharedKey", cl.PresharedKey)

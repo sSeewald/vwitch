@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -236,8 +237,29 @@ func (p AWGParams) validate() error {
 		}
 		rs = append(rs, rng{lo, hi})
 	}
+	if p.ContentPadding != "" {
+		if _, hi, err := ParseRange(p.ContentPadding); err != nil || hi > MaxContentPadding {
+			return fmt.Errorf("content_padding must be a range within 0-%d", MaxContentPadding)
+		}
+	}
+	if p.HeaderProtectionKey != "" {
+		if k, err := base64.StdEncoding.DecodeString(p.HeaderProtectionKey); err != nil || len(k) != 32 {
+			return errors.New("header_protection_key must be a base64 32-byte key")
+		}
+		for i, sz := range []int{p.S1, p.S2, p.S3, p.S4} {
+			if sz < MinHeaderProtectionPadding {
+				return fmt.Errorf("header protection needs s%d >= %d", i+1, MinHeaderProtectionPadding)
+			}
+		}
+	}
 	return nil
 }
+
+// AWG 3.1 limits.
+const (
+	MaxContentPadding          = 1024
+	MinHeaderProtectionPadding = 12 // the header cipher takes its nonce from the S1–S4 padding
+)
 
 func (t Target) validate() error {
 	switch {

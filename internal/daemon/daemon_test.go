@@ -433,3 +433,25 @@ func TestCertFollowsHostnames(t *testing.T) {
 		t.Fatalf("certificate does not cover the new name: %v", err)
 	}
 }
+
+func TestSetAWGStrict(t *testing.T) {
+	c := config.New()
+	c.Server.AWG = ingress.GenerateParams(ingress.NewRand())
+	for _, kv := range [][2]string{{"awg.strict", "true"}, {"awg.content_padding", "off"}, {"awg.disable_cookies", "false"}} {
+		if err := set(c, kv[0], kv[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a := c.Server.AWG
+	if !a.Strict() || a.ContentPadding != "" || a.DisableCookies {
+		t.Fatalf("%+v", a)
+	}
+	_ = set(c, "awg.strict", "true") // idempotent: same key
+	if c.Server.AWG.HeaderProtectionKey != a.HeaderProtectionKey {
+		t.Fatal("key changed")
+	}
+	_ = set(c, "awg.strict", "false")
+	if c.Server.AWG.Strict() {
+		t.Fatal("still strict")
+	}
+}

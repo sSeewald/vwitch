@@ -18,6 +18,7 @@ import (
 	"github.com/sseewald/vwitch/internal/clients"
 	"github.com/sseewald/vwitch/internal/config"
 	"github.com/sseewald/vwitch/internal/egress"
+	"github.com/sseewald/vwitch/internal/ingress"
 	"github.com/sseewald/vwitch/internal/state"
 )
 
@@ -140,6 +141,7 @@ type ClientOptions struct {
 	Strategy *config.Strategy `json:"strategy,omitempty"`
 	Fixed    *string          `json:"fixed,omitempty"`
 	I        *[]string        `json:"i,omitempty"`
+	AWG3     *bool            `json:"awg3,omitempty"`
 }
 
 func (o ClientOptions) apply(cl *config.Client) {
@@ -160,6 +162,9 @@ func (o ClientOptions) apply(cl *config.Client) {
 	}
 	if o.I != nil {
 		cl.I = *o.I
+	}
+	if o.AWG3 != nil {
+		cl.AWG3 = *o.AWG3
 	}
 }
 
@@ -397,6 +402,7 @@ func (d *Daemon) Certificate() (*x509.Certificate, error) {
 var SettingKeys = []string{
 	"endpoint", "strategy", "fixed", "offline", "resolver", "allow_direct", "lockdown_ssh",
 	"hostnames", "language", "portal_actions", "admin_interfaces", "admin_user", "admin_listen", "listen_port",
+	"awg.disable_cookies", "awg.content_padding", "awg.strict",
 }
 
 // Set changes one setting from its string form. CLI and admin UI share it.
@@ -482,6 +488,28 @@ func set(c *config.Config, key, value string) error {
 			return err
 		}
 		c.Server.ListenPort = uint16(p)
+	case "awg.disable_cookies":
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return err
+		}
+		c.Server.AWG.DisableCookies = b
+	case "awg.content_padding":
+		if value == "off" || value == "0" {
+			value = ""
+		}
+		c.Server.AWG.ContentPadding = value
+	case "awg.strict":
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return err
+		}
+		switch a := c.Server.AWG; {
+		case b && !a.Strict():
+			c.Server.AWG = ingress.Strict(a, ingress.NewHeaderProtectionKey(), ingress.NewRand())
+		case !b && a.Strict():
+			c.Server.AWG = ingress.Compatible(a, ingress.NewRand())
+		}
 	default:
 		return fmt.Errorf("unknown setting %q (known: %s)", key, strings.Join(SettingKeys, ", "))
 	}

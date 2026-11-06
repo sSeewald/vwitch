@@ -5,7 +5,6 @@ package setup
 import (
 	"crypto/rand"
 	"math/big"
-	mrand "math/rand/v2"
 	"net"
 	"net/netip"
 	"time"
@@ -39,11 +38,7 @@ func NewConfig(o Options) (*config.Config, string, error) {
 		return nil, "", err
 	}
 	c.Server.PrivateKey = key.String()
-	seed := [32]byte{}
-	if _, err := rand.Read(seed[:]); err != nil {
-		return nil, "", err
-	}
-	c.Server.AWG = ingress.GenerateParams(mrand.New(mrand.NewChaCha8(seed)))
+	c.Server.AWG = ingress.GenerateParams(ingress.NewRand())
 	c.Server.Endpoint = o.Endpoint
 	c.Server.AllowDirect = o.AllowDirect
 	c.Server.LockdownSSH = o.LockdownSSH

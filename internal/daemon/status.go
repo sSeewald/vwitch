@@ -61,6 +61,7 @@ type ClientStatus struct {
 	Strategy     string     `json:"strategy,omitempty"`
 	Fixed        string     `json:"fixed,omitempty"`
 	Outdated     bool       `json:"outdated,omitempty"` // needs a new config (server settings changed)
+	AWG3         bool       `json:"awg3,omitempty"`     // config carries the AWG 3.1 lines
 	state.ClientSwitch
 }
 
@@ -96,7 +97,8 @@ func (d *Daemon) buildStatus(c *config.Config, sw state.Switches, now time.Time)
 	for _, cl := range c.Clients {
 		cs := ClientStatus{Name: cl.Name, Address: cl.Address.String(), Enabled: cl.Enabled, Active: cl.Active(now),
 			Expires: cl.Expires, HandshakeAge: -1, Strategy: string(cl.Strategy), Fixed: cl.Fixed,
-			Outdated: cl.Issued != "" && cl.Issued != clients.Fingerprint(c, cl), ClientSwitch: sw.Clients[cl.Name]}
+			Outdated: cl.Issued != "" && cl.Issued != clients.Fingerprint(c, cl), ClientSwitch: sw.Clients[cl.Name],
+			AWG3: cl.AWG3 || c.Server.AWG.Strict()}
 		if p, ok := peers[cl.PublicKey]; ok {
 			if a := health.HandshakeAge(now, p.LastHandshake); a >= 0 {
 				cs.HandshakeAge = a.Seconds()

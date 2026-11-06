@@ -42,3 +42,19 @@ func TestParseStats(t *testing.T) {
 		t.Fatalf("%+v", s)
 	}
 }
+
+func TestInterfaceUAPIAWG31(t *testing.T) {
+	pk, _ := key(1)
+	hp, hpHex := key(9)
+	s := Spec{PrivateKey: pk, ListenPort: 51845}
+	out, err := interfaceUAPI(s)
+	if err != nil || !strings.Contains(out, "header_protection_key="+strings.Repeat("0", 64)+"\n") ||
+		!strings.Contains(out, "content_padding_addition=0\nrandom_trailers=false\ndisable_cookies=false\n") {
+		t.Fatalf("off must reset the device: %v\n%s", err, out)
+	}
+	s.AWG.HeaderProtectionKey, s.AWG.ContentPadding, s.AWG.RandomTrailers, s.AWG.DisableCookies = hp, "8-96", true, true
+	out, _ = interfaceUAPI(s)
+	if !strings.Contains(out, "header_protection_key="+hpHex+"\ncontent_padding_addition=8-96\nrandom_trailers=true\ndisable_cookies=true\n") {
+		t.Fatal(out)
+	}
+}

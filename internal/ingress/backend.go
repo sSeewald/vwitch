@@ -75,6 +75,19 @@ func interfaceUAPI(s Spec) (string, error) {
 	fmt.Fprintf(&b, "private_key=%s\nlisten_port=%d\n", key, s.ListenPort)
 	fmt.Fprintf(&b, "jc=%d\njmin=%d\njmax=%d\ns1=%d\ns2=%d\ns3=%d\ns4=%d\n", a.Jc, a.Jmin, a.Jmax, a.S1, a.S2, a.S3, a.S4)
 	fmt.Fprintf(&b, "h1=%s\nh2=%s\nh3=%s\nh4=%s\n", a.H1, a.H2, a.H3, a.H4)
+	// AWG 3.1: always written, so switching a feature off resets the device
+	hpk := strings.Repeat("0", 64) // all zero: header protection off
+	if a.HeaderProtectionKey != "" {
+		if hpk, err = keyHex(a.HeaderProtectionKey); err != nil {
+			return "", fmt.Errorf("header protection key: %w", err)
+		}
+	}
+	padding := a.ContentPadding
+	if padding == "" {
+		padding = "0" // off
+	}
+	fmt.Fprintf(&b, "header_protection_key=%s\ncontent_padding_addition=%s\nrandom_trailers=%t\ndisable_cookies=%t\n",
+		hpk, padding, a.RandomTrailers, a.DisableCookies)
 	return b.String(), nil
 }
 

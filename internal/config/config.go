@@ -82,7 +82,7 @@ type Server struct {
 	LockdownSSH bool `yaml:"lockdown_ssh"`
 }
 
-// AWGParams are the AmneziaWG 2.0 obfuscation parameters shared by server and clients.
+// AWGParams are the AmneziaWG obfuscation parameters shared by server and clients.
 type AWGParams struct {
 	Jc   int    `yaml:"jc"`
 	Jmin int    `yaml:"jmin"`
@@ -95,7 +95,19 @@ type AWGParams struct {
 	H2   string `yaml:"h2"`
 	H3   string `yaml:"h3"`
 	H4   string `yaml:"h4"`
+
+	// AmneziaWG 3.1. Without a header protection key, clients without
+	// AWG 3.1 support keep working.
+	DisableCookies bool   `yaml:"disable_cookies,omitempty"` // never send cookie replies (server only)
+	ContentPadding string `yaml:"content_padding,omitempty"` // random padding range "lo-hi" for transport data
+	// HeaderProtectionKey (base64) encrypts the packet headers. Every client
+	// must know it, so clients without AWG 3.1 can no longer connect.
+	HeaderProtectionKey string `yaml:"header_protection_key,omitempty"`
+	RandomTrailers      bool   `yaml:"random_trailers,omitempty"` // random bytes after each packet; needs AWG 3.1 on both sides
 }
+
+// Strict reports whether only AWG 3.1 clients can connect.
+func (p AWGParams) Strict() bool { return p.HeaderProtectionKey != "" || p.RandomTrailers }
 
 // DNS configures the resolver forced on clients.
 type DNS struct {
@@ -197,6 +209,9 @@ type Client struct {
 	Fixed    string   `yaml:"fixed,omitempty"`
 	// Optional AWG 2.0 I1–I5 packets; some clients do not support them.
 	I []string `yaml:"i,omitempty"`
+	// AWG3 adds the AWG 3.1 lines to the client config. Clients without
+	// AWG 3.1 support reject unknown lines, so this is opt-in per client.
+	AWG3 bool `yaml:"awg3,omitempty"`
 }
 
 // Active reports whether the client may connect at time now.
