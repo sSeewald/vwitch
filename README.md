@@ -42,7 +42,7 @@ allowed to send.
 - **Offline behavior.** When no egress is healthy, vwitch can `block` traffic, show an `ask` page to the user, or fall back to `direct`. It returns to an egress automatically once one recovers.
 - **Domain routes.** Send domains such as `google.de` or `netflix.com` (with all subdomains) through a fixed egress, grouped into named routes, configurable in the UI or CLI. Duplicates across routes are rejected.
 - **Kill switch and direct mode.** Global or per client, available from the UI and the CLI.
-- **Server-enforced DNS.** Client DNS is answered locally or forwarded to a public resolver through the client's own egress. No IPv6 leaks.
+- **Server-enforced DNS.** Client configs use vwitch itself (`10.8.0.1`) as DNS server. vwitch answers its own names, caches answers per egress, and forwards the rest to a public resolver through the client's own egress. Queries to any other resolver are redirected too. No IPv6 leaks.
 - **Local UI names.** `v.witch` and `vwitch.internal` work like `fritz.box`, and the names are configurable.
 - **Web UI.**
   - A client view is reachable only from inside the tunnel.
@@ -195,7 +195,7 @@ Defaults:
 | Client network | `10.8.0.1/24` |
 | AmneziaWG port | `51845/udp` |
 | MTU | `1340` |
-| DNS resolver | `9.9.9.9` |
+| Client DNS | `10.8.0.1` (vwitch), upstream `9.9.9.9` |
 | Admin UI | `https://v.witch` (port 443) on `lo` and `awg0`, user `admin` |
 | Client portal | port `80` inside the tunnel |
 

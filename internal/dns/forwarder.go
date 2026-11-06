@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/netip"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
@@ -25,7 +26,8 @@ type Route func(client netip.Addr, name string) (iface string, ok bool)
 type Learn func(name string, addrs []netip.Addr, ttl time.Duration)
 
 // Forwarder answers the local UI names itself and forwards everything else
-// to the public resolver through the asking client's current exit.
+// to the public resolver through the asking client's current exit, caching
+// answers per egress.
 type Forwarder struct {
 	Listen   netip.Addr
 	Upstream netip.AddrPort
@@ -34,6 +36,9 @@ type Forwarder struct {
 	Learn    Learn // optional
 	Timeout  time.Duration
 	Log      *slog.Logger
+
+	once  sync.Once
+	cache *cache
 }
 
 // Serve listens on UDP and TCP port 53 until ctx ends.
@@ -114,11 +119,21 @@ func (f *Forwarder) handle(ctx context.Context, q []byte, client netip.Addr, net
 	if !ok {
 		return reply(h, question, dnsmessage.RCodeRefused, nil)
 	}
-	resp, err := f.exchange(ctx, q, iface, network)
-	if err != nil {
-		f.Log.Debug("dns forward failed", "client", client, "err", err)
-		return reply(h, question, dnsmessage.RCodeServerFailure, nil)
+	f.once.Do(func() { f.cache = newCache() })
+	k := cacheKeyOf(question, iface)
+	resp := f.cache.get(k, h.ID)
+	if resp != nil && network == "udp" && len(resp) > udpLimit(q) {
+		resp = nil // too big for this client's UDP buffer: ask upstream, it truncates
 	}
+	if resp == nil {
+		var err error
+		if resp, err = f.exchange(ctx, q, iface, network); err != nil {
+			f.Log.Debug("dns forward failed", "client", client, "err", err)
+			return reply(h, question, dnsmessage.RCodeServerFailure, nil)
+		}
+		f.cache.put(k, resp)
+	}
+	// also on cache hits, so domain routes keep their addresses
 	if f.Learn != nil && question.Type == dnsmessage.TypeA {
 		if addrs, ttl := answerAddrs(resp); len(addrs) > 0 {
 			f.Learn(name, addrs, ttl)

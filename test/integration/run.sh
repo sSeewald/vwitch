@@ -92,6 +92,7 @@ echo "== client"
 vwitch client add phone > /tmp/phone.conf
 check "client config has AWG params" grep -q '^H1 = ' /tmp/phone.conf
 check "client config has no IPv6" sh -c '! grep -q "::" /tmp/phone.conf'
+check "client config uses vwitch as DNS" grep -qx "DNS = 10.8.0.1" /tmp/phone.conf
 CPRIV=$(awk -F' = ' '/^PrivateKey/{print $2}' /tmp/phone.conf | head -1)
 SPUB=$(awk -F' = ' '/^PublicKey/{print $2}' /tmp/phone.conf)
 PSK=$(awk -F' = ' '/^PresharedKey/{print $2}' /tmp/phone.conf)
