@@ -27,7 +27,7 @@
 
   <section class="card stack">
     <h3>{{t $l "settings.network"}}</h3>
-    <div class="field"><label for="s5">{{t $l "settings.endpoint"}}</label><input id="s5" name="endpoint" value="{{$c.Server.Endpoint}}" autocapitalize="none" spellcheck="false"><p class="hint">{{t $l "settings.endpoint.hint"}}</p></div>
+    <div class="field"><label for="s5">{{t $l "settings.endpoint"}}</label><input id="s5" name="endpoint" value="{{$c.Server.Endpoint}}" required autocapitalize="none" spellcheck="false"><p class="hint">{{t $l "settings.endpoint.hint"}}</p></div>
     <div class="field"><label for="s6">{{t $l "settings.resolver"}}</label><input id="s6" name="resolver" value="{{$c.DNS.Resolver}}" inputmode="decimal"></div>
     <div class="field"><label for="s9">{{t $l "settings.admin_interfaces"}}</label><input id="s9" name="admin_interfaces" value="{{join $c.Server.AdminInterfaces ", "}}" autocapitalize="none" spellcheck="false"><p class="hint">{{t $l "settings.admin_interfaces.hint"}}</p></div>
     <label class="check"><span>{{t $l "settings.lockdown_ssh"}}</span><input class="switch" type="checkbox" name="lockdown_ssh" value="true" {{if $c.Server.LockdownSSH}}checked{{end}}></label>

@@ -102,6 +102,7 @@ fi
 
 if [ "$START" -eq 1 ]; then
   systemctl daemon-reload
-  systemctl enable --now vwitch
+  systemctl enable vwitch
+  systemctl restart vwitch # also picks up the new binary on upgrades
   log "vwitch is running. Check with: vwitch doctor && vwitch status"
 fi

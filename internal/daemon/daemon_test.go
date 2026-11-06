@@ -406,3 +406,16 @@ func TestDomainRoutes(t *testing.T) {
 		t.Fatalf("after remove: %v", got)
 	}
 }
+
+func TestEndpointNeverEmpty(t *testing.T) {
+	d, _, _ := setup(t)
+	if err := d.Set("endpoint", " "); err == nil {
+		t.Fatal("empty endpoint accepted")
+	}
+	if d.Config().Server.Endpoint != "203.0.113.1" {
+		t.Fatal("endpoint changed")
+	}
+	if err := d.SetMany([][2]string{{"language", "de"}, {"endpoint", ""}}); err == nil || d.Config().Web.Language == "de" {
+		t.Fatal("settings save with empty endpoint must fail as a whole")
+	}
+}

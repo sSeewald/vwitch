@@ -415,6 +415,9 @@ func (d *Daemon) SetMany(kv [][2]string) error {
 func set(c *config.Config, key, value string) error {
 	switch key {
 	case "endpoint":
+		if value == "" {
+			return errors.New("must not be empty: clients need the public address of this server")
+		}
 		c.Server.Endpoint = value
 	case "strategy":
 		c.Selection.Strategy = config.Strategy(value)
