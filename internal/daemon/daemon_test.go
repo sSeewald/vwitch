@@ -6,6 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"net/netip"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -32,13 +34,14 @@ type fakeSys struct {
 	peers     []ingress.Peer
 	sockets   []exposure.Socket
 	addrs     map[string][]netip.Addr // by interface
+	up        map[string]bool
 }
 
 func (f *fakeSys) Prepare() error                        { return nil }
 func (f *fakeSys) IngressUp(ingress.Spec) error          { return nil }
 func (f *fakeSys) SyncPeers(p []ingress.Peer) error      { f.peers = p; return nil }
 func (f *fakeSys) SyncEgresses([]egress.Spec) error      { return nil }
-func (f *fakeSys) InterfaceUp(string) bool               { return false }
+func (f *fakeSys) InterfaceUp(i string) bool             { return f.up[i] }
 func (f *fakeSys) InterfaceAddrs(i string) []netip.Addr  { return f.addrs[i] }
 func (f *fakeSys) Listening() ([]exposure.Socket, error) { return f.sockets, nil }
 func (f *fakeSys) Close() error                          { return nil }
@@ -192,7 +195,7 @@ func TestOfflineAskThenAutoReturn(t *testing.T) {
 	if got := exitOf(d, "phone"); got != "portal" {
 		t.Fatalf("want portal, got %s", got)
 	}
-	if route, ok := d.dnsRoute(netip.MustParseAddr("10.8.0.2")); !ok || route != "" {
+	if route, ok := d.dnsRoute(netip.MustParseAddr("10.8.0.2"), "example.org"); !ok || route != "" {
 		t.Fatal("portal client must resolve DNS directly")
 	}
 	if err := d.SetClientSwitch("phone", config.ActionDirect, true); err != nil {
@@ -236,7 +239,7 @@ func TestSecurity(t *testing.T) {
 	sys.sockets = []exposure.Socket{
 		sock("tcp", "0.0.0.0:22"),     // ssh, not locked down
 		sock("udp", "0.0.0.0:51845"),  // ingress
-		sock("tcp", "0.0.0.0:8090"),   // admin, restricted by firewall
+		sock("tcp", "0.0.0.0:443"),    // admin, restricted by firewall
 		sock("tcp", "10.8.0.1:80"),    // portal on the client net
 		sock("tcp", "127.0.0.1:5432"), // loopback
 		sock("tcp", "[::]:3306"),      // database: exposed
@@ -254,5 +257,152 @@ func TestSecurity(t *testing.T) {
 	}
 	if sec = d.Security(); len(sec.PublicAdmin) != 1 || sec.PublicAdmin[0] != "eth0" {
 		t.Fatalf("public admin %v", sec.PublicAdmin)
+	}
+}
+
+func TestLockdownIgnoresIngress(t *testing.T) {
+	d, sys, _ := setup(t)
+	c := d.Config()
+	c.Server.AdminInterfaces = []string{"lo", "awg0", "wt0"}
+	c.Server.LockdownSSH = true
+	sys.up = map[string]bool{"lo": true, "awg0": true}
+	if d.sshLocked(c) {
+		t.Fatal("awg0 alone must not lock SSH (no client exists yet after install)")
+	}
+	sys.up["wt0"] = true
+	if !d.sshLocked(c) {
+		t.Fatal("wt0 up must lock SSH")
+	}
+}
+
+func TestDisableDirectResetsOffline(t *testing.T) {
+	d, _, _ := setup(t)
+	if err := d.Set("offline", "ask"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Set("allow_direct", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if c := d.Config(); c.Server.AllowDirect || c.Selection.Offline != config.OfflineBlock {
+		t.Fatalf("allow_direct=%v offline=%s", c.Server.AllowDirect, c.Selection.Offline)
+	}
+	// several dependent settings in one change
+	if err := d.SetMany([][2]string{{"allow_direct", "true"}, {"offline", "direct"}}); err != nil {
+		t.Fatal(err)
+	}
+	if c := d.Config(); !c.Server.AllowDirect || c.Selection.Offline != config.OfflineDirect {
+		t.Fatalf("allow_direct=%v offline=%s", c.Server.AllowDirect, c.Selection.Offline)
+	}
+	// an invalid combination changes nothing
+	if err := d.SetMany([][2]string{{"allow_direct", "false"}, {"offline", "ask"}}); err == nil {
+		t.Fatal("want error")
+	}
+	if c := d.Config(); !c.Server.AllowDirect {
+		t.Fatal("failed change must not be applied partially")
+	}
+}
+
+func domainRulesOf(sys *fakeSys) []string {
+	var out []string
+	for _, r := range sys.routes.Rules() {
+		if r.Priority == routing.PrioDomain || r.Priority == routing.PrioBlocked {
+			out = append(out, r.String())
+		}
+	}
+	return out
+}
+
+func TestDomainRoutes(t *testing.T) {
+	d, sys, now := setup(t)
+	ctx := context.Background()
+	sys.setUp("vwe1", true, *now)
+	sys.setUp("vwe2", true, *now)
+	d.checkHealth(ctx)
+	d.reconcile(ctx)
+	phone := netip.MustParseAddr("10.8.0.2")
+
+	if err := d.SetRoute("google", "office", []string{"https://www.Google.de/x", "*.google.com", "google.de"}); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := d.Config().Route("google"); !slices.Equal(r.Domains, []string{"google.com", "google.de", "www.google.de"}) {
+		t.Fatalf("domains not normalized/sorted: %v", r.Domains)
+	}
+	if err := d.SetRoute("a-first", "home", []string{"google.de"}); err == nil || !strings.Contains(err.Error(), `google.de is already in route "google"`) {
+		t.Fatalf("duplicate across routes: %v", err)
+	}
+	if err := d.RemoveEgress("office"); err == nil || !strings.Contains(err.Error(), "used by route") {
+		t.Fatalf("remove egress in use: %v", err)
+	}
+	d.reconcile(ctx)
+
+	// DNS for a routed name leaves through the route's egress, others through the client's exit
+	if iface, ok := d.dnsRoute(phone, "mail.google.com"); !ok || iface != "vwe2" {
+		t.Fatalf("routed dns via %q", iface)
+	}
+	if iface, _ := d.dnsRoute(phone, "example.org"); iface != "vwe1" {
+		t.Fatalf("normal dns via %q", iface)
+	}
+
+	// an answer is applied immediately, before any reconcile
+	d.learn("mail.google.com", []netip.Addr{netip.MustParseAddr("142.250.0.1")}, time.Minute)
+	d.learn("example.org", []netip.Addr{netip.MustParseAddr("93.184.215.14")}, time.Minute)
+	want := []string{"75: from 10.8.0.0/24 to 142.250.0.1/32 lookup 51822"}
+	if got := domainRulesOf(sys); !slices.Equal(got, want) {
+		t.Fatalf("rules %v", got)
+	}
+	if st := d.Status(); len(st.Routes) != 1 || !st.Routes[0].Active || st.Routes[0].Learned != 1 {
+		t.Fatalf("route status %+v", st.Routes)
+	}
+
+	// a blocked client must not reach the route
+	if err := d.SetClientSwitch("phone", config.ActionBlock, true); err != nil {
+		t.Fatal(err)
+	}
+	d.reconcile(ctx)
+	if got := domainRulesOf(sys); len(got) != 2 || got[0] != "72: from 10.8.0.2/32 unreachable" {
+		t.Fatalf("blocked client: %v", got)
+	}
+	_ = d.SetClientSwitch("phone", config.ActionBlock, false)
+
+	// target egress down: fall back to the normal exit
+	sys.setUp("vwe2", false, *now)
+	for range 3 {
+		d.checkHealth(ctx)
+	}
+	d.reconcile(ctx)
+	if got := domainRulesOf(sys); len(got) != 0 {
+		t.Fatalf("route to a down egress: %v", got)
+	}
+	if iface, _ := d.dnsRoute(phone, "google.de"); iface != "vwe1" {
+		t.Fatalf("dns must fall back, got %q", iface)
+	}
+	sys.setUp("vwe2", true, *now)
+	d.checkHealth(ctx)
+	d.checkHealth(ctx)
+	d.reconcile(ctx)
+
+	// kill switch wins
+	on := true
+	if err := d.SetGlobal(&on, nil); err != nil {
+		t.Fatal(err)
+	}
+	d.reconcile(ctx)
+	if got := domainRulesOf(sys); slices.ContainsFunc(got, func(r string) bool { return strings.HasPrefix(r, "75:") }) {
+		t.Fatalf("kill switch must drop domain rules: %v", got)
+	}
+	off := false
+	_ = d.SetGlobal(&off, nil)
+	d.reconcile(ctx)
+	if len(domainRulesOf(sys)) != 1 {
+		t.Fatal("route back after kill switch")
+	}
+
+	// removing the route forgets its addresses
+	if err := d.RemoveRoute("google"); err != nil {
+		t.Fatal(err)
+	}
+	d.reconcile(ctx)
+	if got := domainRulesOf(sys); len(got) != 0 {
+		t.Fatalf("after remove: %v", got)
 	}
 }

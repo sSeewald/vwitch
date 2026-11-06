@@ -6,8 +6,11 @@ import (
 	"net"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/sseewald/vwitch/internal/domains"
 )
 
 var (
@@ -170,6 +173,41 @@ func (c *Config) Validate() error {
 			}
 		default:
 			add("client %q: unknown strategy %q", cl.Name, cl.Strategy)
+		}
+	}
+
+	owner := map[string]string{} // domain -> route
+	for _, r := range c.Routes {
+		if err := ValidateName(r.Name); err != nil {
+			add("route: %w", err)
+		}
+		if seen["r:"+r.Name] {
+			add("route %q defined twice", r.Name)
+		}
+		seen["r:"+r.Name] = true
+		if _, ok := c.Egress(r.Egress); !ok {
+			add("route %q: unknown egress %q", r.Name, r.Egress)
+		}
+		if len(r.Domains) == 0 {
+			add("route %q: no domains", r.Name)
+		}
+		if !slices.IsSorted(r.Domains) {
+			add("route %q: domains must be sorted", r.Name)
+		}
+		for _, d := range r.Domains {
+			if n, err := domains.Normalize(d); err != nil || n != d {
+				add("route %q: invalid domain %q", r.Name, d)
+				continue
+			}
+			if o, dup := owner[d]; dup {
+				if o == r.Name {
+					add("route %q: domain %s listed twice", r.Name, d)
+				} else {
+					add("route %q: domain %s is already in route %q", r.Name, d, o)
+				}
+				continue
+			}
+			owner[d] = r.Name
 		}
 	}
 	return errors.Join(errs...)

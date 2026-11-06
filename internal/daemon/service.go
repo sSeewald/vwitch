@@ -3,6 +3,7 @@ package daemon
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net/netip"
 	"os"
@@ -108,6 +109,11 @@ func (d *Daemon) UpdateEgress(name string, o EgressOptions) error {
 // RemoveEgress deletes an egress.
 func (d *Daemon) RemoveEgress(name string) error {
 	err := d.update(func(c *config.Config) error {
+		for _, r := range c.Routes {
+			if r.Egress == name {
+				return fmt.Errorf("egress %q is used by route %q: change or remove the route first", name, r.Name)
+			}
+		}
 		n := len(c.Egresses)
 		c.Egresses = slices.DeleteFunc(c.Egresses, func(e config.Egress) bool { return e.Name == name })
 		if len(c.Egresses) == n {
@@ -227,7 +233,7 @@ func (d *Daemon) RemoveClient(name string) error {
 	return err
 }
 
-// SetGlobal toggles the global kill switch and/or full speed.
+// SetGlobal toggles the global kill switch and/or direct mode.
 func (d *Daemon) SetGlobal(killSwitch, fast *bool) error {
 	err := d.state.Update(func(s *state.Switches) {
 		if killSwitch != nil {
@@ -389,64 +395,82 @@ var SettingKeys = []string{
 
 // Set changes one setting from its string form. CLI and admin UI share it.
 func (d *Daemon) Set(key, value string) error {
-	value = strings.TrimSpace(value)
+	return d.SetMany([][2]string{{key, value}})
+}
+
+// SetMany applies several settings as one change: they are validated
+// together, so dependent settings (allow_direct and offline) can change at once.
+func (d *Daemon) SetMany(kv [][2]string) error {
 	return d.update(func(c *config.Config) error {
-		switch key {
-		case "endpoint":
-			c.Server.Endpoint = value
-		case "strategy":
-			c.Selection.Strategy = config.Strategy(value)
-		case "fixed":
-			c.Selection.Fixed = value
-		case "offline":
-			c.Selection.Offline = config.OfflinePolicy(value)
-		case "resolver":
-			a, err := netip.ParseAddr(value)
-			if err != nil {
-				return err
+		var errs []error
+		for _, p := range kv {
+			if err := set(c, p[0], strings.TrimSpace(p[1])); err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", p[0], err))
 			}
-			c.DNS.Resolver = a
-		case "allow_direct":
-			b, err := strconv.ParseBool(value)
-			if err != nil {
-				return err
-			}
-			c.Server.AllowDirect = b
-		case "lockdown_ssh":
-			b, err := strconv.ParseBool(value)
-			if err != nil {
-				return err
-			}
-			c.Server.LockdownSSH = b
-		case "hostnames":
-			c.Web.Hostnames = list(value)
-		case "language":
-			c.Web.Language = value
-		case "portal_actions":
-			c.Web.Portal.Actions = nil
-			for _, a := range list(value) {
-				c.Web.Portal.Actions = append(c.Web.Portal.Actions, config.PortalAction(a))
-			}
-			if c.Web.Portal.Actions == nil {
-				c.Web.Portal.Actions = []config.PortalAction{}
-			}
-		case "admin_interfaces":
-			c.Server.AdminInterfaces = list(value)
-		case "admin_user":
-			c.Web.Admin.Username = value
-		case "admin_listen":
-			c.Web.Admin.Listen = value
-		case "listen_port":
-			p, err := strconv.ParseUint(value, 10, 16)
-			if err != nil {
-				return err
-			}
-			c.Server.ListenPort = uint16(p)
-		default:
-			return fmt.Errorf("unknown setting %q (known: %s)", key, strings.Join(SettingKeys, ", "))
 		}
-		return nil
+		return errors.Join(errs...)
 	})
+}
+
+func set(c *config.Config, key, value string) error {
+	switch key {
+	case "endpoint":
+		c.Server.Endpoint = value
+	case "strategy":
+		c.Selection.Strategy = config.Strategy(value)
+	case "fixed":
+		c.Selection.Fixed = value
+	case "offline":
+		c.Selection.Offline = config.OfflinePolicy(value)
+	case "resolver":
+		a, err := netip.ParseAddr(value)
+		if err != nil {
+			return err
+		}
+		c.DNS.Resolver = a
+	case "allow_direct":
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return err
+		}
+		c.Server.AllowDirect = b
+		if !b {
+			c.Selection.Offline = config.OfflineBlock // ask/direct need the direct exit
+		}
+	case "lockdown_ssh":
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return err
+		}
+		c.Server.LockdownSSH = b
+	case "hostnames":
+		c.Web.Hostnames = list(value)
+	case "language":
+		c.Web.Language = value
+	case "portal_actions":
+		c.Web.Portal.Actions = nil
+		for _, a := range list(value) {
+			c.Web.Portal.Actions = append(c.Web.Portal.Actions, config.PortalAction(a))
+		}
+		if c.Web.Portal.Actions == nil {
+			c.Web.Portal.Actions = []config.PortalAction{}
+		}
+	case "admin_interfaces":
+		c.Server.AdminInterfaces = list(value)
+	case "admin_user":
+		c.Web.Admin.Username = value
+	case "admin_listen":
+		c.Web.Admin.Listen = value
+	case "listen_port":
+		p, err := strconv.ParseUint(value, 10, 16)
+		if err != nil {
+			return err
+		}
+		c.Server.ListenPort = uint16(p)
+	default:
+		return fmt.Errorf("unknown setting %q (known: %s)", key, strings.Join(SettingKeys, ", "))
+	}
+	return nil
 }
 
 func list(v string) []string {

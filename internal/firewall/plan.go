@@ -80,9 +80,9 @@ func (p Plan) Rules() []Rule {
 
 	// input: admin port (and SSH with lockdown) only on admin interfaces;
 	// these come first so awg0 can be an admin interface if configured
-	p.restrictPort(add, p.AdminPort)
+	p.restrictPort(add, p.AdminPort, "")
 	if p.LockdownSSH {
-		p.restrictPort(add, 22)
+		p.restrictPort(add, 22, awg) // SSH never via the VPN ingress
 	}
 	// clients may only reach the portal and DNS (and ping the server)
 	add(Rule{Chain: ChainInput, IIF: awg, CtEstablished: true, Verdict: Accept})
@@ -119,12 +119,15 @@ func (p Plan) Rules() []Rule {
 	return rs
 }
 
-// restrictPort allows tcp port only on admin interfaces.
-func (p Plan) restrictPort(add func(Rule), port uint16) {
+// restrictPort allows tcp port only on admin interfaces, except skip.
+func (p Plan) restrictPort(add func(Rule), port uint16, skip string) {
 	if port == 0 {
 		return
 	}
 	for _, i := range p.AdminIfaces {
+		if i == skip {
+			continue
+		}
 		add(Rule{Chain: ChainInput, IIF: i, Proto: ProtoTCP, DPort: port, Verdict: Accept})
 	}
 	add(Rule{Chain: ChainInput, Proto: ProtoTCP, DPort: port, Verdict: Drop})

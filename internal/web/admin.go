@@ -47,7 +47,8 @@ func NewAdmin(d *daemon.Daemon, r *Renderer, log *slog.Logger) *Admin {
 }
 
 var nav = []NavItem{
-	{"/", "nav.dashboard"}, {"/egresses", "nav.egresses"}, {"/clients", "nav.clients"}, {"/settings", "nav.settings"},
+	{"/", "nav.dashboard"}, {"/egresses", "nav.egresses"}, {"/clients", "nav.clients"}, {"/routes", "nav.routes"},
+	{"/settings", "nav.settings"},
 }
 
 // Handler returns the routes, protected against cross-origin requests.
@@ -79,6 +80,10 @@ func (a *Admin) Handler() http.Handler {
 		return a.d.RemoveClient(r.PathValue("name"))
 	}))
 	p("POST /clients/{name}/renew", a.renewClient)
+	p("GET /routes", a.routes)
+	p("POST /routes", a.saveRoute)
+	p("POST /routes/{name}", a.saveRoute)
+	p("POST /routes/{name}/delete", a.deleteRoute)
 	p("GET /settings", a.page("settings", "nav.settings"))
 	p("POST /settings", a.form("/settings", "settings", a.saveSettings))
 	p("POST /settings/account", a.form("/settings", "settings", func(r *http.Request) error {
@@ -599,10 +604,11 @@ func (a *Admin) saveSettings(r *http.Request) error {
 		"lockdown_ssh":     strconv.FormatBool(c.Server.LockdownSSH),
 		"language":         c.Web.Language,
 	}
-	// order matters: allow_direct before offline, fixed before strategy
+	// applied as one change and validated together; within it, allow_direct
+	// comes before offline and fixed before strategy
 	order := []string{"allow_direct", "fixed", "strategy", "offline", "endpoint", "resolver", "hostnames",
 		"portal_actions", "admin_interfaces", "lockdown_ssh", "language"}
-	var errs []error
+	var changes [][2]string
 	for _, k := range order {
 		v := strings.TrimSpace(r.FormValue(k))
 		switch k {
@@ -611,14 +617,14 @@ func (a *Admin) saveSettings(r *http.Request) error {
 		case "portal_actions": // one checkbox per action
 			v = strings.Join(r.Form["portal_actions"], ", ")
 		}
-		if v == current[k] {
-			continue
-		}
-		if err := a.d.Set(k, v); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", k, err))
+		if v != current[k] {
+			changes = append(changes, [2]string{k, v})
 		}
 	}
-	return errors.Join(errs...)
+	if len(changes) == 0 {
+		return nil
+	}
+	return a.d.SetMany(changes)
 }
 
 func remoteHost(r *http.Request) string {

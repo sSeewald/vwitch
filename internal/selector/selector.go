@@ -58,7 +58,7 @@ type Client struct {
 	Name            string
 	Strategy        config.Strategy // empty: use global
 	Fixed           string
-	Fast            bool // client chose "full speed"
+	Fast            bool // client chose direct mode
 	Block           bool // client's own kill switch
 	DirectConfirmed bool // client accepted the direct exit while offline
 }

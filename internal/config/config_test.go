@@ -54,6 +54,21 @@ func TestValidate(t *testing.T) {
 			a := netip.MustParseAddr("10.8.0.2")
 			c.Clients = []Client{{Name: "a", Address: a, PublicKey: "k"}, {Name: "b", Address: a, PublicKey: "k"}}
 		}, "not unique"},
+		{"route ok", func(c *Config) {
+			c.Routes = []Route{{Name: "google", Egress: "home", Domains: []string{"google.com", "google.de"}},
+				{Name: "mail", Egress: "home", Domains: []string{"mail.google.com"}}}
+		}, ""},
+		{"route unknown egress", func(c *Config) {
+			c.Routes = []Route{{Name: "g", Egress: "nope", Domains: []string{"google.de"}}}
+		}, "unknown egress"},
+		{"route domain in two routes", func(c *Config) {
+			c.Routes = []Route{{Name: "a", Egress: "home", Domains: []string{"google.de"}},
+				{Name: "b", Egress: "home", Domains: []string{"google.de"}}}
+		}, `already in route "a"`},
+		{"route not normalized", func(c *Config) {
+			c.Routes = []Route{{Name: "g", Egress: "home", Domains: []string{"*.Google.de"}}}
+		}, "invalid domain"},
+		{"route empty", func(c *Config) { c.Routes = []Route{{Name: "g", Egress: "home"}} }, "no domains"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

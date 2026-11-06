@@ -15,7 +15,7 @@ import (
 // TestAllPagesRender executes every template with realistic data in all
 // languages, catching template errors and missing translations at build time.
 // untranslated finds i18n keys (e.g. "egress.add") that leaked into a page.
-var untranslated = regexp.MustCompile(`\b(nav|egress|settings|dash|client)\.[a-z_]+`)
+var untranslated = regexp.MustCompile(`\b(nav|egress|settings|dash|client|route)\.[a-z_]+`)
 
 func TestAllPagesRender(t *testing.T) {
 	r, err := NewRenderer()
@@ -29,6 +29,7 @@ func TestAllPagesRender(t *testing.T) {
 		Egresses: []daemon.EgressStatus{{Name: "home", Enabled: true, Healthy: true, HandshakeAge: 12, LatencyMs: 23, RxRate: 1500}},
 		Clients:  []daemon.ClientStatus{{Name: "phone", Address: "10.8.0.2", Active: true, Online: true, Exit: "egress", Egress: "home", Expires: &exp}},
 		Events:   []state.Event{{Time: time.Now(), Key: "switched", Args: []string{"phone", "@exit.block", "home", "@reason.failover"}}},
+		Routes:   []daemon.RouteStatus{{Name: "google", Egress: "home", Domains: []string{"google.de", "youtube.com"}, Active: true, Learned: 3}},
 	}
 	data := pageData{Status: st, Config: cfg, AllowDirect: true}
 	for _, lang := range []string{"en", "de"} {
@@ -41,6 +42,17 @@ func TestAllPagesRender(t *testing.T) {
 			}
 			if untranslated.MatchString(body) {
 				t.Fatalf("%s/%s: untranslated key in output", lang, page)
+			}
+		}
+		for _, draft := range []routeDraft{{}, {For: "google", Egress: "home", Domains: "kept.example"}, {Name: "new", Domains: "typed.example"}} {
+			w := httptest.NewRecorder()
+			r.Page(w, "routes", Page{Lang: lang, Admin: true, Nav: nav, Path: "/routes", Data: routesPage{pageData: data, Draft: draft}})
+			b := w.Body.String()
+			if w.Code != 200 || !strings.Contains(b, "youtube.com") || untranslated.MatchString(b) {
+				t.Fatalf("routes page %+v: %s", draft, b)
+			}
+			if draft.Domains != "" && !strings.Contains(b, draft.Domains) {
+				t.Fatalf("draft input lost: %+v", draft)
 			}
 		}
 		w := httptest.NewRecorder()

@@ -7,7 +7,7 @@ packages:
   - curl
   - ca-certificates
 write_files:
-  - path: /etc/vwitch/netbird.env
+  - path: /root/netbird.env
     permissions: "0600"
     content: |
       NB_SETUP_KEY=${NETBIRD_SETUP_KEY}
@@ -15,7 +15,7 @@ write_files:
 runcmd:
   # NetBird for admin access (interface wt0); vwitch never touches its tables
   - curl -fsSL https://pkgs.netbird.io/install.sh | sh
-  - . /etc/vwitch/netbird.env && netbird up --setup-key "$NB_SETUP_KEY" ${NB_MANAGEMENT_URL:+--management-url "$NB_MANAGEMENT_URL"} && rm -f /etc/vwitch/netbird.env
-  - curl -fsSL https://github.com/sseewald/vwitch/releases/latest/download/install.sh | sh -s -- --password-file /root/vwitch-admin-password --language de --allow-direct --admin-interfaces lo,wt0 --lockdown-ssh
+  - . /root/netbird.env && netbird up --setup-key "$NB_SETUP_KEY" ${NB_MANAGEMENT_URL:+--management-url "$NB_MANAGEMENT_URL"} && rm -f /root/netbird.env
+  - curl -fsSL https://github.com/sseewald/vwitch/releases/latest/download/install.sh | sh -s -- --password-file /root/vwitch-admin-password --language de --allow-direct --admin-interfaces lo,awg0,wt0 --lockdown-ssh
   - vwitch doctor || true
 final_message: "vwitch installed. Admin password: /root/vwitch-admin-password. Add clients with: vwitch client add <name> --qr"

@@ -80,3 +80,20 @@ func TestLockdownSSH(t *testing.T) {
 		t.Fatal(out)
 	}
 }
+
+func TestAdminViaVPNButNoSSH(t *testing.T) {
+	// awg0 as admin interface: clients reach the admin UI, never SSH
+	p := testPlan()
+	p.AdminIfaces = []string{"lo", "awg0", "wt0"}
+	p.LockdownSSH = true
+	out := Render(p.Rules())
+	if !strings.Contains(out, `iifname "awg0" tcp dport 8090 accept`) {
+		t.Fatal("admin not reachable via awg0:\n" + out)
+	}
+	if strings.Contains(out, `iifname "awg0" tcp dport 22 accept`) {
+		t.Fatal("SSH open to VPN clients:\n" + out)
+	}
+	if strings.Index(out, `iifname "awg0" tcp dport 8090 accept`) > strings.Index(out, `iifname "awg0" drop`) {
+		t.Fatal("admin accept must come before the awg0 drop:\n" + out)
+	}
+}

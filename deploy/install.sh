@@ -10,7 +10,7 @@
 #   --address CIDR           server address + client network (default 10.8.0.1/24)
 #   --resolver IP            public DNS resolver for clients (default 9.9.9.9)
 #   --allow-direct           allow the server's own uplink as exit
-#   --admin-interfaces LIST  interfaces for the admin UI, e.g. lo,wt0 (default lo)
+#   --admin-interfaces LIST  interfaces for the admin UI, e.g. lo,awg0,wt0 (default lo,awg0)
 #   --lockdown-ssh           allow SSH only on admin interfaces once they are up
 #   --language de|en         default UI language
 #   --password-file PATH     where to store the generated admin password

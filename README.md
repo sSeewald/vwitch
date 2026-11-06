@@ -40,12 +40,13 @@ allowed to send.
 - **Health-based selection.** Each egress is checked by handshake age plus active probes through the tunnel, with hysteresis. Strategies are `failover`, `weighted` (sticky per client) and `fixed`, and each can be overridden per client.
 - **Fail-safe by design.** Policy routing ends in a fixed `unreachable` rule and forward policy is drop. A missing egress blocks traffic instead of leaking it.
 - **Offline behavior.** When no egress is healthy, vwitch can `block` traffic, show an `ask` page to the user, or fall back to `direct`. It returns to an egress automatically once one recovers.
+- **Domain routes.** Send domains such as `google.de` or `netflix.com` (with all subdomains) through a fixed egress, grouped into named routes, configurable in the UI or CLI. Duplicates across routes are rejected.
 - **Kill switch and direct mode.** Global or per client, available from the UI and the CLI.
 - **Server-enforced DNS.** Client DNS is answered locally or forwarded to a public resolver through the client's own egress. No IPv6 leaks.
 - **Local UI names.** `v.witch` and `vwitch.internal` work like `fritz.box`, and the names are configurable.
 - **Web UI.**
   - A client view is reachable only from inside the tunnel.
-  - An admin view is HTTPS only and reachable only via chosen interfaces (for example NetBird `wt0`), with username and password.
+  - An admin view at **https://v.witch** for every VPN client, HTTPS only, with username and password. Which interfaces may reach it is configurable (default `lo` and `awg0`; add NetBird `wt0` for access without the VPN). SSH is never opened to VPN clients.
   - A security panel lists open ports on the server that you should close.
   - Live updates via SSE, mobile first, light and dark themes, English and German.
 - **Full CLI.** Status, egresses, clients (QR code included), ordering, kill switch and settings, all from the terminal.
@@ -95,12 +96,13 @@ docker compose exec vwitch vwitch status
 
 ### First sign-in
 
-The admin UI listens on port **8090**, HTTPS only, and by default only on `lo`.
-From your machine, open an SSH tunnel and browse to it:
+The admin UI listens on port **443**, HTTPS only, on `lo` and on the VPN
+ingress `awg0`. Connect a client (`vwitch client add laptop --qr`) and open
+**https://v.witch**. Before your first client exists, use an SSH tunnel:
 
 ```sh
-ssh -L 8090:127.0.0.1:8090 root@<server>
-# then open https://127.0.0.1:8090
+ssh -L 8443:127.0.0.1:443 root@<server>
+# then open https://127.0.0.1:8443
 ```
 
 | | |
@@ -112,8 +114,12 @@ ssh -L 8090:127.0.0.1:8090 root@<server>
 Until you install your own certificate, the browser warns about a
 self-signed certificate. Compare its SHA-256 fingerprint with the one vwitch
 logs (`journalctl -u vwitch | grep sha256`, or `docker logs vwitch`) before you
-accept it. With NetBird, set `vwitch set admin_interfaces lo,wt0` and open the
-server's NetBird address instead of using a tunnel.
+accept it. With NetBird, set `vwitch set admin_interfaces lo,awg0,wt0` and open
+the server's NetBird address as well.
+
+Installed with an older version? Explicit values in `vwitch.yaml` are kept, so
+switch over once with `vwitch set admin_listen :443` and
+`vwitch set admin_interfaces lo,awg0` (plus `wt0` if you use NetBird).
 
 ### Cloud-init
 
@@ -140,11 +146,40 @@ vwitch status                                  # egresses, health, clients
 | New config for a client (lost or outdated) | `vwitch client renew phone --qr` |
 | Order egresses | `vwitch egress order home office` |
 | Pin a client to an egress | `vwitch client set phone --strategy fixed --fixed office` |
+| Domains via a fixed egress | `vwitch route set streaming --via home netflix.com youtube.com` |
+| Add or remove route domains | `vwitch route add streaming disneyplus.com` / `vwitch route rm streaming youtube.com` |
 | Kill switch | `vwitch killswitch on` / `off` |
 | Change settings | `vwitch set <key> <value>` |
 | Admin password | `vwitch admin passwd` |
 | Own certificate for the admin UI | `vwitch tls set cert.pem key.pem` |
 | Health check of the host | `vwitch doctor` |
+
+## Domain routes
+
+A route sends a list of domains through one egress, no matter which exit the
+client normally uses (including direct mode). Manage routes under **Routes**
+in the admin UI or with `vwitch route`.
+
+```sh
+vwitch route set streaming --via home netflix.com youtube.com
+vwitch route list
+```
+
+- A domain includes all its subdomains (`google.de` covers `www.google.de`).
+  The most specific domain wins, so `mail.google.com` can go elsewhere than
+  `google.com`. Input is cleaned up: `https://www.Google.de/x` becomes
+  `www.google.de`. Each domain may be in one route only.
+- vwitch learns the addresses from the clients' DNS queries, which it answers
+  anyway. The query itself leaves through the route's egress, so CDNs return
+  addresses that fit that path. The address is routed **before** the client
+  gets the answer, so the first connection already takes the route. Learned
+  addresses are kept for at least an hour so long connections stay on their
+  path.
+- The kill switch and blocked clients always win. If the route's egress is
+  down, clients use their normal exit until it is back.
+- Limits: browsers with their own encrypted DNS (Secure DNS / DoH) and
+  hard-coded IP addresses bypass DNS and therefore the route. Addresses a
+  client cached before the route existed apply once their DNS entry expires.
 
 ## Configuration
 
@@ -161,7 +196,7 @@ Defaults:
 | AmneziaWG port | `51845/udp` |
 | MTU | `1340` |
 | DNS resolver | `9.9.9.9` |
-| Admin UI | `https://…:8090` on `lo`, user `admin` |
+| Admin UI | `https://v.witch` (port 443) on `lo` and `awg0`, user `admin` |
 | Client portal | port `80` inside the tunnel |
 
 All of these are configurable.
@@ -206,12 +241,14 @@ outside and does not belong to vwitch.
    (or your `listen_port`). Use your provider's firewall (Hetzner Cloud
    Firewall, AWS security groups, …) or nftables/ufw to drop everything else.
    vwitch never touches tables it does not own, so your own rules stay intact.
-2. **Keep admin access off the internet.** Join the server to an overlay VPN
-   such as [NetBird](https://netbird.io), then:
+2. **Keep admin access off the internet.** The admin UI is only reachable
+   through the VPN (`awg0`) and `lo`. For SSH, join the server to an overlay
+   VPN such as [NetBird](https://netbird.io), then:
    ```sh
-   vwitch set admin_interfaces lo,wt0
+   vwitch set admin_interfaces lo,awg0,wt0
    vwitch set lockdown_ssh true      # SSH only via lo/wt0 once wt0 is up
    ```
+   SSH is never opened on `awg0`, and `awg0` alone never triggers the lockdown.
    SSH stays open until the overlay interface is up, so you cannot lock
    yourself out during setup. The cloud-init examples do this automatically
    with `--netbird-setup-key … --lockdown-ssh`.

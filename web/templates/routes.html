@@ -1,0 +1,51 @@
+{{define "content"}}{{$l := .Lang}}{{$d := .Data.Draft}}
+<p class="muted small">{{t $l "route.hint"}}</p>
+{{if not .Data.Config.Egresses}}
+<p class="card muted">{{t $l "route.no_egress"}}</p>
+{{else}}
+<ul class="egress-list">
+{{range .Data.Status.Routes}}{{$r := .}}{{$edit := eq $d.For $r.Name}}
+  {{$sel := $r.Egress}}{{$txt := join $r.Domains "\n"}}{{if $edit}}{{$sel = $d.Egress}}{{$txt = $d.Domains}}{{end}}
+  <li class="egress route">
+    <div class="egress-main">
+      <div class="egress-head">
+        <h3>{{$r.Name}}</h3>
+        {{if $r.Active}}<span class="pill ok">{{t $l "route.active"}}</span>{{else}}<span class="pill bad">{{t $l "route.inactive"}}</span>{{end}}
+      </div>
+      <p class="meta"><span>{{t $l "route.via"}} <b>{{$r.Egress}}</b></span><span>{{t $l "route.learned" $r.Learned}}</span></p>
+      <p class="chips">{{range $r.Domains}}<span class="chip mono">{{.}}</span>{{end}}</p>
+      <details class="egress-more"{{if $edit}} open{{end}}>
+        <summary>{{t $l "route.edit"}}</summary>
+        <form class="stack route-form" method="post" action="/routes/{{$r.Name}}">
+          <div class="field"><label for="via-{{$r.Name}}">{{t $l "route.via"}}</label>
+            <select id="via-{{$r.Name}}" name="egress">{{range $.Data.Config.Egresses}}<option {{if eq .Name $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select></div>
+          <div class="field"><label for="dom-{{$r.Name}}">{{t $l "route.domains"}}</label>
+            <textarea id="dom-{{$r.Name}}" name="domains" rows="5" autocapitalize="none" spellcheck="false">{{$txt}}</textarea>
+            <p class="hint">{{t $l "route.domains.hint"}}</p></div>
+          <button class="small">{{t $l "save"}}</button>
+        </form>
+        <form method="post" action="/routes/{{$r.Name}}/delete" hx-confirm="{{t $l "route.delete.confirm" $r.Name}}">
+          <button class="danger small">{{t $l "delete"}}</button>
+        </form>
+      </details>
+    </div>
+  </li>
+{{else}}
+  <li class="card muted">{{t $l "route.none"}}</li>
+{{end}}
+</ul>
+
+<h2>{{t $l "route.add"}}</h2>
+{{$new := eq $d.For ""}}
+<form class="card stack" method="post" action="/routes">
+  <div class="field"><label for="rname">{{t $l "name"}}</label>
+    <input id="rname" name="name" required pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,31}" placeholder="{{t $l "route.name.placeholder"}}" value="{{if $new}}{{$d.Name}}{{end}}"></div>
+  <div class="field"><label for="rvia">{{t $l "route.via"}}</label>
+    <select id="rvia" name="egress">{{range .Data.Config.Egresses}}<option {{if and $new (eq .Name $d.Egress)}}selected{{end}}>{{.Name}}</option>{{end}}</select></div>
+  <div class="field"><label for="rdom">{{t $l "route.domains"}}</label>
+    <textarea id="rdom" name="domains" rows="5" required autocapitalize="none" spellcheck="false" placeholder="google.de&#10;youtube.com">{{if $new}}{{$d.Domains}}{{end}}</textarea>
+    <p class="hint">{{t $l "route.domains.hint"}}</p></div>
+  <button>{{t $l "route.add"}}</button>
+</form>
+{{end}}
+{{end}}

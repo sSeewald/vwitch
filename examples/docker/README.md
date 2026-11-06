@@ -49,4 +49,4 @@ On first start `serve --init` creates `config/vwitch.yaml` from the
 changes go through the CLI, the admin UI or by editing the file plus
 `vwitch reload`.
 
-Admin UI: https://127.0.0.1:8090 on the host (or via SSH tunnel). It is HTTPS only; until you upload a certificate it uses a self-signed one, so compare the SHA-256 fingerprint from `docker logs vwitch`.
+Admin UI: https://v.witch from any VPN client, or https://127.0.0.1 on the host (or via SSH tunnel). It is HTTPS only; until you upload a certificate it uses a self-signed one, so compare the SHA-256 fingerprint from `docker logs vwitch`.

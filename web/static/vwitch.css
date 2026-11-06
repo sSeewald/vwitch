@@ -172,6 +172,13 @@ details[open] > summary::before { transform: rotate(90deg); }
   .egress-form { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
 }
 
+/* domain routes: same cards as egresses, without rank and actions */
+.egress.route { grid-template-columns: 1fr; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.chip { padding: 3px 9px; border-radius: 8px; background: var(--surface-2); font-size: 13px; overflow-wrap: anywhere; }
+.route-form { margin: 12px 0; }
+.route-form button { justify-self: start; }
+
 /* icon buttons */
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; }
 .seg form { display: contents; }
