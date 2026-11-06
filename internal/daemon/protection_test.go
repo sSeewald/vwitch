@@ -2,8 +2,10 @@ package daemon
 
 import (
 	"context"
+	"net/netip"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sseewald/vwitch/internal/firewall"
 	"github.com/sseewald/vwitch/internal/geo"
@@ -66,9 +68,19 @@ func TestRegionBlocking(t *testing.T) {
 	if sys.blockSets[0].Ranges[0].From.String() != "5.8.0.0" {
 		t.Fatalf("set %+v", sys.blockSets[0])
 	}
-	d.onBlocked(nflog.Hit{Prefix: firewall.LogPrefix("region", false), Src: d.Config().Clients[0].Address, Dst: sys.blockSets[0].Ranges[0].From, Proto: 6, DPort: 443})
-	if ev := d.BlockLog(5, "address"); len(ev) != 1 || ev[0].Country != "RU" || ev[0].Client != "phone" || ev[0].Port != 443 {
+	// the client looked the address up as mail.ru: hit and activity name it
+	client, ru := d.Config().Clients[0].Address, sys.blockSets[0].Ranges[0].From
+	d.dnsSeen(client, "www.mail.ru", "")
+	d.dnsAnswer("www.mail.ru", []netip.Addr{ru}, time.Minute)
+	d.onBlocked(nflog.Hit{Prefix: firewall.LogPrefix("region", false), Src: client, Dst: ru, Proto: 6, DPort: 443})
+	if ev := d.BlockLog(5, "address"); len(ev) != 1 || ev[0].Country != "RU" || ev[0].Client != "phone" || ev[0].Port != 443 || ev[0].Domain != "www.mail.ru" {
 		t.Fatalf("hit %+v", ev)
+	}
+	if len(d.BlockLog(5, "domain")) != 0 {
+		t.Fatal("an address hit with a name is not a DNS block")
+	}
+	if l := d.Domains(""); len(l) != 1 || l[0].Domain != "mail.ru" || l[0].Country != "RU" {
+		t.Fatalf("activity %+v", l)
 	}
 	_ = d.Set("regions.enabled", "false")
 	d.reconcile(context.Background())

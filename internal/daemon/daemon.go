@@ -95,7 +95,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		Names:    func() []string { return d.cfg.Get().Web.Hostnames },
 		Protect:  c.Server.Address.Masked(),
 		Route:    d.dnsRoute,
-		Learn:    d.learn,
+		Learn:    d.dnsAnswer,
 		Block:    d.dnsBlock,
 		Seen:     d.dnsSeen,
 		Timeout:  c.Health.Timeout,

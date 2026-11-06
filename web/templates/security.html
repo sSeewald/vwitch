@@ -56,8 +56,8 @@
     <tbody>
     {{range $g.Events}}<tr>
       <td class="mono nowrap when">{{.Time.Format "02.01. 15:04:05"}}</td>
-      <td class="kind" title="{{if .Domain}}DNS{{else if .Incoming}}{{t $l "block.direction.incoming"}}{{else}}{{t $l "block.direction.outgoing"}}{{end}}">{{if .Domain}}<span class="dir">DNS</span>{{else if .Incoming}}<span class="dir in">↓</span>{{else}}<span class="dir out">↑</span>{{end}}</td>
-      <td class="target">{{if .Domain}}<span class="mono">{{.Domain}}</span>{{else}}{{with .Country}}<span title="{{country $l .}}">{{flag .}}</span> {{end}}<span class="mono">{{.Addr}}{{if .Port}}:{{.Port}}{{end}}</span>{{with .Proto}} <span class="muted small">{{.}}</span>{{end}}{{end}}</td>
+      <td class="kind" title="{{if not .Addr.IsValid}}DNS{{else if .Incoming}}{{t $l "block.direction.incoming"}}{{else}}{{t $l "block.direction.outgoing"}}{{end}}">{{if not .Addr.IsValid}}<span class="dir">DNS</span>{{else if .Incoming}}<span class="dir in">↓</span>{{else}}<span class="dir out">↑</span>{{end}}</td>
+      <td class="target">{{if not .Addr.IsValid}}<span class="mono">{{.Domain}}</span>{{else}}{{with .Country}}<span title="{{country $l .}}">{{flag .}}</span> {{end}}<span class="mono">{{.Addr}}{{if .Port}}:{{.Port}}{{end}}</span>{{with .Proto}} <span class="muted small">{{.}}</span>{{end}}{{with .Domain}}<br><span class="mono small muted">{{.}}</span>{{end}}{{end}}</td>
       <td class="who">{{if .Client}}{{.Client}}{{else}}<span class="muted">–</span>{{end}}</td>
       <td class="muted small rule">{{t $l (print "block.source." .Source)}}</td>
     </tr>{{end}}

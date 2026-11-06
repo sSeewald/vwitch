@@ -27,11 +27,12 @@ import (
 // the DNS forwarder asks, the block log, the domain list, the traffic
 // history and the country database.
 type protection struct {
-	log     *blocking.Log
-	domains *activity.Domains
-	traffic *activity.Traffic
-	matcher atomic.Pointer[blocking.Matcher]
-	names   atomic.Pointer[map[netip.Addr]string] // client address -> name
+	log      *blocking.Log
+	domains  *activity.Domains
+	resolved *activity.Resolved
+	traffic  *activity.Traffic
+	matcher  atomic.Pointer[blocking.Matcher]
+	names    atomic.Pointer[map[netip.Addr]string] // client address -> name
 
 	// guarded by Daemon.mu
 	matcherKey string
@@ -48,6 +49,8 @@ const (
 	blockLogSize   = 1000
 	domainKeep     = 24 * time.Hour
 	domainMax      = 5000
+	resolvedKeep   = time.Hour // names a blocked connection can be traced to
+	resolvedMax    = 20000
 	geoMaxAge      = 7 * 24 * time.Hour
 	geoRetry       = time.Hour
 	geoTimeout     = 10 * time.Minute
@@ -59,10 +62,11 @@ const (
 
 func newProtection() protection {
 	return protection{
-		log:     blocking.NewLog(blockLogSize),
-		domains: activity.NewDomains(domainKeep, domainMax),
-		traffic: activity.NewTraffic(),
-		geoWake: make(chan struct{}, 1),
+		log:      blocking.NewLog(blockLogSize),
+		domains:  activity.NewDomains(domainKeep, domainMax),
+		resolved: activity.NewResolved(resolvedKeep, resolvedMax),
+		traffic:  activity.NewTraffic(),
+		geoWake:  make(chan struct{}, 1),
 	}
 }
 
@@ -278,6 +282,7 @@ func (d *Daemon) dnsSeen(client netip.Addr, name, source string) {
 	}
 	if source != "" {
 		d.prot.log.Add(blocking.Event{Time: now, Source: source, Client: who, Domain: name})
+		d.prot.traffic.Blocked(who, now)
 	}
 }
 
@@ -292,9 +297,21 @@ func (d *Daemon) onBlocked(h nflog.Hit) {
 		e.Addr = h.Src
 	} else {
 		e.Addr, e.Client = h.Dst, d.clientName(h.Src)
+		e.Domain = d.prot.resolved.Name(e.Addr, e.Time) // the name the client looked up
 	}
 	e.Country = d.geoDB().Country(e.Addr)
 	d.prot.log.Add(e)
+	d.prot.traffic.Blocked(e.Client, e.Time)
+	if e.Domain != "" && !d.cfg.Get().Security.NoActivity {
+		d.prot.domains.RegionBlocked(e.Domain, e.Country, e.Time)
+	}
+}
+
+// dnsAnswer is the forwarder's Learn hook: it remembers which name an
+// address belongs to and updates domain routes.
+func (d *Daemon) dnsAnswer(name string, addrs []netip.Addr, ttl time.Duration) {
+	d.prot.resolved.Add(name, addrs, d.now())
+	d.learn(name, addrs, ttl)
 }
 
 // --- operations for CLI and UI ---
@@ -336,9 +353,9 @@ func (d *Daemon) BlockLog(n int, kind string) []blocking.Event {
 	var keep func(blocking.Event) bool
 	switch kind {
 	case "domain":
-		keep = func(e blocking.Event) bool { return e.Domain != "" }
+		keep = func(e blocking.Event) bool { return !e.Addr.IsValid() }
 	case "address":
-		keep = func(e blocking.Event) bool { return e.Domain == "" }
+		keep = func(e blocking.Event) bool { return e.Addr.IsValid() }
 	}
 	return d.prot.log.Recent(n, keep)
 }

@@ -163,6 +163,11 @@ func exprs(r Rule, inet bool, sets map[string]*nftables.Set) ([]expr.Any, error)
 			return nil, fmt.Errorf("reject is only used in inet tables")
 		}
 		e = append(e, &expr.Reject{Type: unix.NFT_REJECT_ICMPX_UNREACH, Code: unix.NFT_REJECT_ICMPX_ADMIN_PROHIBITED})
+	case RejectTCP:
+		if r.Proto != ProtoTCP {
+			return nil, fmt.Errorf("tcp reset needs a tcp match")
+		}
+		e = append(e, &expr.Reject{Type: unix.NFT_REJECT_TCP_RST})
 	case Log:
 		e = append(e,
 			&expr.Limit{Type: expr.LimitTypePkts, Rate: logRate, Unit: expr.LimitTimeSecond, Burst: logRate},

@@ -341,5 +341,8 @@
   "client.pinned.strategy.hint": "This client has its own strategy instead of the one from the settings.",
   "portal.state.paused": "Paused",
   "portal.title.paused": "Your traffic is paused",
-  "portal.text.paused": "This device's traffic was paused, by you or by the administrator. Nothing leaves until it is resumed."
+  "portal.text.paused": "This device's traffic was paused, by you or by the administrator. Nothing leaves until it is resumed.",
+  "act.region_blocked": "country blocked",
+  "act.region_blocked.hint": "Connections to its address in %s were blocked by the country filter.",
+  "act.blocked_events": "blocked"
 }

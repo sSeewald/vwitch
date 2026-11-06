@@ -341,5 +341,8 @@
   "client.pinned.strategy.hint": "Dieser Client hat eine eigene Strategie statt der aus den Einstellungen.",
   "portal.state.paused": "Pausiert",
   "portal.title.paused": "Dein Verkehr ist pausiert",
-  "portal.text.paused": "Der Verkehr dieses Geräts wurde pausiert, von dir oder vom Administrator. Nichts geht raus, bis er fortgesetzt wird."
+  "portal.text.paused": "Der Verkehr dieses Geräts wurde pausiert, von dir oder vom Administrator. Nichts geht raus, bis er fortgesetzt wird.",
+  "act.region_blocked": "Land gesperrt",
+  "act.region_blocked.hint": "Verbindungen zu seiner Adresse in %s hat die Ländersperre blockiert.",
+  "act.blocked_events": "gesperrt"
 }

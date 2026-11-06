@@ -48,7 +48,8 @@ class H(http.server.BaseHTTPRequestHandler):
         b=self.client_address[0].encode(); self.send_response(200); self.send_header("Content-Length",str(len(b))); self.end_headers(); self.wfile.write(b)
     def log_message(self,*a): pass
 http.server.ThreadingHTTPServer(("",80),H).serve_forever()' &
-# a minimal resolver: every A query is answered with 198.51.100.7
+# a minimal resolver: names under ru.test get 198.51.100.66 (the "RU"
+# range), every other A query 198.51.100.7
 ip netns exec home python3 -c '
 import socket,struct
 s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.bind(("9.9.9.9",53))
@@ -56,7 +57,8 @@ while True:
     q,a=s.recvfrom(512); i=12
     while q[i]: i+=q[i]+1
     end=i+5
-    ans=b"\xc0\x0c\x00\x01\x00\x01"+struct.pack(">I",30)+b"\x00\x04"+socket.inet_aton("198.51.100.7")
+    ip="198.51.100.66" if q[12:i].endswith(b"\x02ru\x04test") else "198.51.100.7"
+    ans=b"\xc0\x0c\x00\x01\x00\x01"+struct.pack(">I",30)+b"\x00\x04"+socket.inet_aton(ip)
     s.sendto(q[:2]+b"\x81\x80"+q[4:6]+b"\x00\x01\x00\x00\x00\x00"+q[12:end]+ans,a)' &
 
 echo "== vwitch"
@@ -178,6 +180,11 @@ wait_for nft list table inet vwitch_block && ok "nft table inet vwitch_block exi
 check "block table holds the country range" sh -c 'nft list table inet vwitch_block | grep -q "198.51.100.64/26"'
 SRC=$(ip netns exec client curl -s --max-time 5 http://198.51.100.66/ || true)
 [ -z "$SRC" ] && ok "outgoing connection to the country blocked" || bad "outgoing to country leaked: '$SRC'"
+# looked up by name: the TCP reset ends the attempt at once (curl 7, not a timeout)
+ip netns exec client dig +short +time=2 @10.8.0.1 www.ru.test >/dev/null
+rc=0; ip netns exec client curl -s --max-time 5 http://198.51.100.66/ >/dev/null 2>&1 || rc=$?
+[ "$rc" = 7 ] && ok "blocked TCP connection is reset at once" || bad "blocked TCP connection: curl exit $rc"
+wait_for sh -c 'vwitch block log | grep -q "198.51.100.66.*(RU) www.ru.test"' && ok "block log names the looked-up domain" || { bad "block log domain"; vwitch block log; }
 SRC=$(ip netns exec client curl -s --max-time 5 http://198.51.100.1/ || true)
 [ "$SRC" = "10.99.0.2" ] && ok "other countries unaffected" || bad "other target: '$SRC'"
 ip netns exec home curl -s --max-time 2 --interface 198.51.100.67 http://192.0.2.1:9/ >/dev/null 2>&1 || true

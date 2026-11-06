@@ -23,6 +23,7 @@ func TestBlockPlan(t *testing.T) {
 	got := RenderBlock(sets, rules)
 	for _, want := range []string{
 		`iifname "awg0" ct state new ip daddr @f0_region_v4 limit rate 20/second log prefix "vw|region|out" group 7091`,
+		`iifname "awg0" ct state new ip daddr @f0_region_v4 meta l4proto tcp reject with tcp reset`,
 		`iifname "awg0" ct state new ip daddr @f0_region_v4 reject`,
 		`iifname != "awg0" iifname != "lo" ct state new ip saddr @f0_region_v4 drop`,
 		`iifname != "awg0" iifname != "lo" ct state new ip6 saddr @f0_region_v6 drop`,

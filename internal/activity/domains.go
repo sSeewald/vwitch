@@ -5,6 +5,7 @@ package activity
 
 import (
 	"cmp"
+	"net/netip"
 	"slices"
 	"sync"
 	"time"
@@ -20,7 +21,8 @@ type DomainStat struct {
 	Blocked int       `json:"blocked"`
 	Clients []string  `json:"clients"`
 	Last    time.Time `json:"last"`
-	Names   []string  `json:"names"` // recent full names, newest first
+	Names   []string  `json:"names"`             // recent full names, newest first
+	Country string    `json:"country,omitempty"` // a country filter rejected its address
 }
 
 // Domains aggregates DNS lookups per registrable domain. Entries older than
@@ -33,9 +35,11 @@ type Domains struct {
 }
 
 type domainEntry struct {
-	clients map[string]*count
-	last    time.Time
-	names   []string
+	clients   map[string]*count
+	last      time.Time
+	names     []string
+	country   string // last country filter hit, see RegionBlocked
+	countryAt time.Time
 }
 
 type count struct{ queries, blocked int }
@@ -116,6 +120,9 @@ func (d *Domains) List(client string, now time.Time) []DomainStat {
 			continue
 		}
 		s := DomainStat{Domain: k, Last: e.last, Names: slices.Clone(e.names)}
+		if now.Sub(e.countryAt) <= d.keep {
+			s.Country = e.country
+		}
 		for name, c := range e.clients {
 			if client != "" && name != client {
 				continue
@@ -141,4 +148,62 @@ func (d *Domains) Clear() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	clear(d.entries)
+}
+
+// RegionBlocked marks a domain whose address a country filter rejected for
+// a client; the domain list then shows it as blocked with the country.
+func (d *Domains) RegionBlocked(name, country string, now time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if e, ok := d.entries[Base(name)]; ok {
+		e.country, e.countryAt = country, now
+	}
+}
+
+// Resolved remembers which name the DNS answers of the last keep period
+// gave for an address, so a connection to that address can be named.
+type Resolved struct {
+	mu   sync.Mutex
+	keep time.Duration
+	max  int
+	m    map[netip.Addr]resolved
+}
+
+type resolved struct {
+	name string
+	at   time.Time
+}
+
+// NewResolved creates an address to name memory.
+func NewResolved(keep time.Duration, max int) *Resolved {
+	return &Resolved{keep: keep, max: max, m: map[netip.Addr]resolved{}}
+}
+
+// Add records the addresses of one answer for name.
+func (r *Resolved) Add(name string, addrs []netip.Addr, now time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.m)+len(addrs) > r.max {
+		for a, v := range r.m {
+			if now.Sub(v.at) > r.keep {
+				delete(r.m, a)
+			}
+		}
+		if len(r.m)+len(addrs) > r.max {
+			clear(r.m) // rare: more distinct answers than max within keep
+		}
+	}
+	for _, a := range addrs {
+		r.m[a] = resolved{name, now}
+	}
+}
+
+// Name returns the name last resolved to a, or "".
+func (r *Resolved) Name(a netip.Addr, now time.Time) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if v, ok := r.m[a]; ok && now.Sub(v.at) <= r.keep {
+		return v.name
+	}
+	return ""
 }

@@ -236,8 +236,8 @@ func (a *Admin) routeDomain(r *http.Request) error {
 
 // trafficSeries is the JSON the traffic chart draws.
 type trafficSeries struct {
-	Step   int64      `json:"step"` // seconds per point
-	Points [][3]int64 `json:"points"`
+	Step   int64      `json:"step"`   // seconds per point
+	Points [][4]int64 `json:"points"` // time, down, up (bytes), blocked events
 }
 
 func (a *Admin) traffic(w http.ResponseWriter, r *http.Request) {
@@ -245,9 +245,9 @@ func (a *Admin) traffic(w http.ResponseWriter, r *http.Request) {
 	if len(pts) > 1 { // the running bucket is incomplete and would always dip
 		pts = pts[:len(pts)-1]
 	}
-	out := trafficSeries{Step: int64(rg.Step / time.Second), Points: make([][3]int64, len(pts))}
+	out := trafficSeries{Step: int64(rg.Step / time.Second), Points: make([][4]int64, len(pts))}
 	for i, p := range pts {
-		out.Points[i] = [3]int64{p.T, p.Down, p.Up}
+		out.Points[i] = [4]int64{p.T, p.Down, p.Up, p.Blocks}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")

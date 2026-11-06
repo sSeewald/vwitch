@@ -61,10 +61,13 @@ func blockCmd(g *globals) *cobra.Command {
 				}
 				for _, e := range r.Log {
 					what, dir := e.Domain, "→"
-					if what == "" {
+					if e.Addr.IsValid() {
 						what = fmt.Sprintf("%s %s/%d", e.Addr, e.Proto, e.Port)
 						if e.Country != "" {
 							what += " (" + e.Country + ")"
+						}
+						if e.Domain != "" {
+							what += " " + e.Domain
 						}
 					}
 					if e.Incoming {
