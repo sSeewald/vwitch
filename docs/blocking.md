@@ -39,6 +39,11 @@ the regional internet registries publish (about 46 MB, once), keeps a compact
 copy on the server and refreshes it weekly. Connections that already exist keep
 working. Private and special-purpose address ranges are never filtered.
 
+A blocked outgoing connection fails right away instead of hanging: TCP
+connections get a reset, other protocols an "administratively prohibited"
+message. Apps and browsers show an error immediately rather than waiting for
+a timeout.
+
 > **Careful with "Allow only" and incoming connections.** It also locks out
 > SSH and the VPN from every other country, including yours when you travel.
 > The page shows a warning while this combination is selected.
@@ -54,10 +59,13 @@ vwitch set regions.enabled true
 
 The log at the bottom shows the latest blocked lookups and connections: time,
 type (**DNS**, **↑** outgoing, **↓** incoming), target with country flag,
-client and the rule that matched (*Domain list* or *Regions*). Filter with
+client and the rule that matched (*Domain list* or *Regions*). For a blocked
+outgoing connection, the domain the client looked up is shown under the
+address, so you can see which site was affected (taken from vwitch's DNS
+answers of the last hour). Filter with
 **All**, **Connections** and **Domains**. The log keeps the last 1000 entries
 in memory and refreshes every few seconds.
 
 ```sh
-vwitch block log
+vwitch block log      # the domain follows the country for outgoing connections
 ```

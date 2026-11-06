@@ -46,7 +46,7 @@ In every case vwitch returns to an egress by itself as soon as one recovers.
 | --- | --- | --- |
 | **Public address of this server** | Hostname or IP that goes into client configs. Changing it makes all client configs outdated. | `endpoint` |
 | **Public DNS resolver** | Where vwitch forwards client DNS lookups, through each client's own egress. Default `9.9.9.9`. | `resolver` |
-| **Interfaces allowed to reach this admin page** | Default `lo, awg0`: the server itself and every VPN client of the first ingress. With an overlay VPN such as NetBird, add `wt0`. Removing the interface you are connected through locks you out. | `admin_interfaces` |
+| **Interfaces allowed to reach this admin page** | Default `lo, awg0`: the server itself and every VPN client of the first ingress. Ingress interfaces (`awg0`, `awg1`, …) are added and removed by the *Admin UI reachable* switch of each [ingress](ingresses.md#change-an-ingress), so you rarely edit them here. Add other interfaces yourself, for example `wt0` for an overlay VPN such as NetBird. Removing the interface you are connected through locks you out. | `admin_interfaces` |
 | **Allow SSH only on these interfaces** | Once the overlay interface (for example `wt0`) is up, SSH is only accepted on the admin interfaces. SSH is never opened to VPN clients. | `lockdown_ssh` |
 
 The ports of the ingresses are set on the [Ingresses](ingresses.md) page.
