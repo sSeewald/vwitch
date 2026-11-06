@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.3](https://github.com/sSeewald/vwitch/compare/v1.2.2...v1.2.3) (2026-11-06)
+
+
+### Bug Fixes
+
+* camouflage shield before the client name ([#15](https://github.com/sSeewald/vwitch/issues/15)) ([c36ab8f](https://github.com/sSeewald/vwitch/commit/c36ab8ff1418a36086f00fabfb2cf6e607ef5c57))
+* self-signed admin certificate accepted by Apple devices ([#14](https://github.com/sSeewald/vwitch/issues/14)) ([7c5dfb3](https://github.com/sSeewald/vwitch/commit/7c5dfb3e9cd9ccbf6ed95434596817ddf13b1722))
+
 ## [1.2.2](https://github.com/sSeewald/vwitch/compare/v1.2.1...v1.2.2) (2026-11-06)
 
 
