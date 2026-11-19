@@ -1,6 +1,6 @@
 # Integration test image: runs vwitch, a WireGuard "home" exit and an
 # AmneziaWG client in separate network namespaces. Needs --privileged.
-FROM golang:1.27.3-trixie AS build
+FROM golang:1.27.4-trixie AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
