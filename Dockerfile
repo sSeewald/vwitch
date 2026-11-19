@@ -6,7 +6,7 @@
 # container root, but with every capability dropped except NET_ADMIN,
 # NET_RAW and NET_BIND_SERVICE, no-new-privileges and a read-only rootfs.
 # See examples/docker/compose.yaml.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie@sha256:af1bfc2614ebb1dbd31af514b78740fd678850e76498762b425ecee4c5c6ea80 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d AS build
 ARG VERSION=dev
 ARG TARGETOS TARGETARCH
 WORKDIR /src
