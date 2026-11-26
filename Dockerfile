@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -buildvcs=false -ldflags "-s -w -X github.com/sseewald/vwitch/internal/version.version=${VERSION}" -o /out/vwitch ./cmd/vwitch
 
-FROM gcr.io/distroless/static-debian13@sha256:448810357cc8e67b7208988abdba0f5ec3d3aebee0a5b13eb624979792cffc0f
+FROM gcr.io/distroless/static-debian13@sha256:4c2cd1dee442c9a99924a378c7c126fac8fef14771579ef567c3f2bdd7a5122a
 LABEL org.opencontainers.image.title="vwitch" \
       org.opencontainers.image.description="Egress switch for an AmneziaWG relay" \
       org.opencontainers.image.source="https://github.com/sseewald/vwitch" \
